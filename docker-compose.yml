@@ -1,0 +1,52 @@
+# Standard deployment:  cp .env.example .env  →  edit  →  docker compose up -d
+# Builds the image locally the first time. To use the prebuilt image instead, set
+# APP_IMAGE=ghcr.io/essntl/blog-site:latest and run `docker compose pull && docker compose up -d`.
+
+name: artem-blog
+
+services:
+  app:
+    image: ${APP_IMAGE:-artem-blog:local}
+    build:
+      context: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Always talk to the bundled database service (the DATABASE_URL in .env is for local development).
+      DATABASE_URL: postgresql://${POSTGRES_USER:-blog}:${POSTGRES_PASSWORD:-blog}@db:5432/${POSTGRES_DB:-blog}
+      UPLOAD_DIR: /data/uploads
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-blog}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-blog}
+      POSTGRES_DB: ${POSTGRES_DB:-blog}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  db-data:
+  uploads:

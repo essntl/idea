@@ -1,0 +1,138 @@
+# ZimaOS / CasaOS app definition.
+# Import via App Store → "+" (Install a customized app) → Import → paste or upload this file.
+# Edit every value marked CHANGE_ME in the app's settings before the first start.
+# Data lives in /DATA/AppData/artem-blog/{postgres,uploads} and survives restarts and updates.
+
+name: artem-blog
+
+services:
+  app:
+    image: ghcr.io/essntl/blog-site:latest
+    container_name: artem-blog
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SITE_URL: http://CHANGE_ME:3000
+      NEXTAUTH_SECRET: CHANGE_ME
+      ADMIN_EMAIL: CHANGE_ME@example.com
+      ADMIN_PASSWORD: CHANGE_ME
+      DATABASE_URL: postgresql://blog:CHANGE_ME_DB_PASSWORD@artem-blog-db:5432/blog
+      CAPTCHA_PROVIDER: turnstile
+      TURNSTILE_SITE_KEY: 1x00000000000000000000AA
+      TURNSTILE_SECRET_KEY: 1x0000000000000000000000000000000AA
+      RECAPTCHA_SITE_KEY: ""
+      RECAPTCHA_SECRET_KEY: ""
+      UPLOAD_DIR: /data/uploads
+      MAX_UPLOAD_MB: "15"
+      TZ: UTC
+    ports:
+      - target: 3000
+        published: "3000"
+        protocol: tcp
+    volumes:
+      - type: bind
+        source: /DATA/AppData/artem-blog/uploads
+        target: /data/uploads
+    x-casaos:
+      envs:
+        - container: SITE_URL
+          description:
+            en_us: Public address of the site without trailing slash, e.g. https://blog.example.com or http://192.168.1.10:3000
+        - container: NEXTAUTH_SECRET
+          description:
+            en_us: "Random secret for sessions (32+ characters). Generate with: openssl rand -base64 32"
+        - container: ADMIN_EMAIL
+          description:
+            en_us: Admin login email (used to create the account on first start)
+        - container: ADMIN_PASSWORD
+          description:
+            en_us: Admin password for the first start; change it later in Admin → Settings
+        - container: DATABASE_URL
+          description:
+            en_us: Replace CHANGE_ME_DB_PASSWORD with the same password as POSTGRES_PASSWORD of the database service
+        - container: CAPTCHA_PROVIDER
+          description:
+            en_us: turnstile (Cloudflare) or recaptcha (Google reCAPTCHA v3)
+        - container: TURNSTILE_SITE_KEY
+          description:
+            en_us: Cloudflare Turnstile site key (the default is a test key that lets everyone pass)
+        - container: TURNSTILE_SECRET_KEY
+          description:
+            en_us: Cloudflare Turnstile secret key
+        - container: RECAPTCHA_SITE_KEY
+          description:
+            en_us: Google reCAPTCHA v3 site key (only if CAPTCHA_PROVIDER=recaptcha)
+        - container: RECAPTCHA_SECRET_KEY
+          description:
+            en_us: Google reCAPTCHA v3 secret key
+        - container: MAX_UPLOAD_MB
+          description:
+            en_us: Maximum image upload size in MB
+        - container: TZ
+          description:
+            en_us: Timezone for dates, e.g. Europe/Berlin
+      ports:
+        - container: "3000"
+          description:
+            en_us: Web UI
+      volumes:
+        - container: /data/uploads
+          description:
+            en_us: Uploaded and imported images
+
+  db:
+    image: postgres:16-alpine
+    container_name: artem-blog-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: blog
+      POSTGRES_PASSWORD: CHANGE_ME_DB_PASSWORD
+      POSTGRES_DB: blog
+      TZ: UTC
+    volumes:
+      - type: bind
+        source: /DATA/AppData/artem-blog/postgres
+        target: /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blog -d blog"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    x-casaos:
+      envs:
+        - container: POSTGRES_PASSWORD
+          description:
+            en_us: Database password — must match the password inside DATABASE_URL of the app
+      volumes:
+        - container: /var/lib/postgresql/data
+          description:
+            en_us: PostgreSQL data
+
+x-casaos:
+  architectures:
+    - amd64
+    - arm64
+  main: app
+  store_app_id: artem-blog
+  category: Blog
+  author: Artem
+  developer: essntl
+  icon: https://raw.githubusercontent.com/essntl/blog-site/main/public/icon-256.png
+  index: /
+  port_map: "3000"
+  scheme: http
+  title:
+    en_us: Artem Blog
+  tagline:
+    en_us: Personal blog and articles
+  description:
+    en_us: Minimal black-and-white personal site with a diary-style blog, long-form articles with comments, and an admin area with a Notion-like editor.
+  tips:
+    before_install:
+      en_us: |
+        Before the first start, open the app settings and replace every CHANGE_ME value:
+        NEXTAUTH_SECRET (random 32+ characters), ADMIN_EMAIL, ADMIN_PASSWORD, SITE_URL,
+        and the database password (it appears twice: POSTGRES_PASSWORD and inside DATABASE_URL).
+        Then sign in at /admin.

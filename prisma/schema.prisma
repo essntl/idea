@@ -1,0 +1,160 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PostStatus {
+  draft
+  published
+  scheduled
+}
+
+enum CommentStatus {
+  visible
+  pending
+  hidden
+  deleted
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  passwordHash       String
+  name               String
+  /// Bumped on password change; sessions carrying an older value are rejected.
+  sessionVersion     Int       @default(0)
+  /// Used by the dashboard to count "new comments since last visit".
+  lastSeenCommentsAt DateTime?
+  createdAt          DateTime  @default(now())
+}
+
+model BlogPost {
+  id          String     @id @default(cuid())
+  slug        String     @unique
+  title       String
+  description String     @default("")
+  contentJson Json
+  contentHtml String     @default("")
+  contentText String     @default("")
+  tags        Tag[]      @relation("BlogPostTags")
+  status      PostStatus @default(draft)
+  publishedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([status, publishedAt])
+}
+
+model Article {
+  id             String     @id @default(cuid())
+  title          String
+  slug           String     @unique
+  excerpt        String     @default("")
+  contentJson    Json
+  contentHtml    String     @default("")
+  contentText    String     @default("")
+  toc            Json       @default("[]")
+  previewImageId String?
+  previewImage   Media?     @relation(fields: [previewImageId], references: [id], onDelete: SetNull)
+  categoryId     String?
+  category       Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  tags           Tag[]      @relation("ArticleTags")
+  status         PostStatus @default(draft)
+  publishedAt    DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  seoTitle       String?
+  seoDescription String?
+  readingTime    Int        @default(1)
+  legacyUrl      String?
+  comments       Comment[]
+
+  @@index([status, publishedAt])
+  @@index([categoryId])
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  description String    @default("")
+  articles    Article[]
+}
+
+/// Tags are shared between blog posts and articles (one vocabulary, two relations).
+model Tag {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  slug      String     @unique
+  blogPosts BlogPost[] @relation("BlogPostTags")
+  articles  Article[]  @relation("ArticleTags")
+}
+
+model Media {
+  id        String    @id @default(cuid())
+  filename  String
+  /// Path relative to UPLOAD_DIR, e.g. "2026/10/ckxyz.webp". Served at /media/<path>.
+  path      String    @unique
+  width     Int
+  height    Int
+  mimeType  String
+  size      Int
+  alt       String    @default("")
+  /// Original URL for imported images; makes migrations idempotent.
+  sourceUrl String?   @unique
+  createdAt DateTime  @default(now())
+  articles  Article[]
+}
+
+model Comment {
+  id           String        @id @default(cuid())
+  articleId    String
+  article      Article       @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  parentId     String?
+  parent       Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies      Comment[]     @relation("CommentReplies")
+  authorName   String
+  authorEmail  String?
+  body         String
+  isAdminReply Boolean       @default(false)
+  status       CommentStatus @default(visible)
+  ipHash       String?
+  createdAt    DateTime      @default(now())
+
+  @@index([articleId, createdAt])
+  @@index([status])
+  @@index([ipHash, createdAt])
+}
+
+model Page {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  title       String   @default("")
+  contentJson Json
+  contentHtml String   @default("")
+  updatedAt   DateTime @updatedAt
+}
+
+model Setting {
+  key   String @id
+  value Json
+}
+
+model Redirect {
+  id         String   @id @default(cuid())
+  fromPath   String   @unique
+  toPath     String
+  statusCode Int      @default(301)
+  createdAt  DateTime @default(now())
+}
+
+/// Fixed-window counters used for login and comment rate limiting.
+model RateLimit {
+  key     String   @id
+  count   Int
+  resetAt DateTime
+}
