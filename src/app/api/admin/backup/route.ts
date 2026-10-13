@@ -10,7 +10,7 @@ export const maxDuration = 300;
 /** Download a full backup (.tar.gz). */
 export const GET = adminRoute(async () => {
   const stream = await createBackupStream();
-  const name = `blog-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.tar.gz`;
+  const name = `idea-backup-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.tar.gz`;
   return new Response(Readable.toWeb(stream) as ReadableStream, {
     headers: {
       "content-type": "application/gzip",

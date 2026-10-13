@@ -1,12 +1,12 @@
 # Standard deployment:  cp .env.example .env  →  edit  →  docker compose up -d
 # Builds the image locally the first time. To use the prebuilt image instead, set
-# APP_IMAGE=ghcr.io/essntl/blog-site:latest and run `docker compose pull && docker compose up -d`.
+# APP_IMAGE=ghcr.io/essntl/idea:latest and run `docker compose pull && docker compose up -d`.
 
-name: artem-blog
+name: idea
 
 services:
   app:
-    image: ${APP_IMAGE:-artem-blog:local}
+    image: ${APP_IMAGE:-idea:local}
     build:
       context: .
     restart: unless-stopped

@@ -58,7 +58,7 @@ One line each; where the brief was silent or a choice had to be made.
 - Runtime image: `node:22-bookworm-slim` (glibc — avoids musl issues with sharp/argon2/Prisma), `tini` as PID 1.
 - The entrypoint starts as root only to `chown` the uploads folder (ZimaOS bind mounts are created root-owned), then re-executes itself as UID 1001 via `setpriv`; migrations, seed and the server all run unprivileged.
 - Migrations run with a standalone Prisma CLI installed in `/opt/prisma`; seed and migration scripts are esbuild bundles in `/app/dist`.
-- `docker-compose.yml` builds locally by default (works before any image is published); set `APP_IMAGE=ghcr.io/essntl/blog-site:latest` to pull the prebuilt one. The compose file builds `DATABASE_URL` from `POSTGRES_*`, so `.env`'s `DATABASE_URL` only matters for local development.
-- Image name is `ghcr.io/essntl/blog-site` (from the repository https://github.com/essntl/blog-site); the workflow derives it from `${{ github.repository }}`.
+- `docker-compose.yml` builds locally by default (works before any image is published); set `APP_IMAGE=ghcr.io/essntl/idea:latest` to pull the prebuilt one. The compose file builds `DATABASE_URL` from `POSTGRES_*`, so `.env`'s `DATABASE_URL` only matters for local development.
+- Image name is `ghcr.io/essntl/idea` (from the repository https://github.com/essntl/idea); the workflow derives it from `${{ github.repository }}`.
 - Backups: a `.tar.gz` with `backup.json` (all content tables, no users) + every media file; restore replaces content in one transaction.
 - Site language is `en`; dates are formatted `en-GB` in the `TZ` timezone.

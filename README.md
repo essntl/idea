@@ -1,6 +1,6 @@
-# Artem — blog & articles
+# idea
 
-A minimal, black-and-white personal site:
+**idea** (ιδέα) — a minimal, black-and-white personal site:
 
 - **Blog** (`/blog`): a diary-style list of short posts.
 - **Articles** (`/articles`): long-form writing with categories, custom slugs, preview images, a table of contents and threaded comments.
@@ -30,7 +30,7 @@ Built with Next.js 16, React 19, TypeScript, Tailwind CSS 4, PostgreSQL 16, Pris
 You need Docker with the Compose plugin.
 
 ```bash
-git clone https://github.com/essntl/blog-site.git && cd blog-site
+git clone https://github.com/essntl/idea.git && cd idea
 cp .env.example .env
 ```
 
@@ -53,7 +53,7 @@ The first run builds the image, which takes a few minutes. Open <http://localhos
 
 On start, the container checks the configuration, applies database migrations, creates the admin account if it doesn't exist yet, and starts the server. If `NEXTAUTH_SECRET` or the admin credentials are missing (or still `CHANGE_ME`), it stops and prints what to fix. To see that output, run `docker compose logs -f app`.
 
-**Use the prebuilt image instead of building.** Set `APP_IMAGE=ghcr.io/essntl/blog-site:latest` in `.env`, then run:
+**Use the prebuilt image instead of building.** Set `APP_IMAGE=ghcr.io/essntl/idea:latest` in `.env`, then run:
 
 ```bash
 docker compose pull
@@ -69,7 +69,7 @@ Data is kept in two named volumes: `db-data` (PostgreSQL) and `uploads` (images)
 
 ## ZimaOS
 
-`docker-compose.zimaos.yml` uses the prebuilt image from GHCR and stores data under `/DATA/AppData/artem-blog/`.
+`docker-compose.zimaos.yml` uses the prebuilt image from GHCR and stores data under `/DATA/AppData/idea/`.
 
 1. **Import the app.** In ZimaOS, open the **App Store**, click **+** (top right), choose **Install a customized app**, then **Import**. Paste the contents of `docker-compose.zimaos.yml` or upload the file, and confirm.
 2. **Fill in the settings.** In the app settings form, replace every `CHANGE_ME`:
@@ -86,10 +86,10 @@ Data is kept in two named volumes: `db-data` (PostgreSQL) and `uploads` (images)
 
 | Path on ZimaOS | Contents |
 |---|---|
-| `/DATA/AppData/artem-blog/postgres` | Database files |
-| `/DATA/AppData/artem-blog/uploads` | Images |
+| `/DATA/AppData/idea/postgres` | Database files |
+| `/DATA/AppData/idea/uploads` | Images |
 
-Both survive restarts, updates and reinstalls. To update, use **Check for updates** / **Update** on the app (it pulls `ghcr.io/essntl/blog-site:latest`) and restart; migrations run automatically.
+Both survive restarts, updates and reinstalls. To update, use **Check for updates** / **Update** on the app (it pulls `ghcr.io/essntl/idea:latest`) and restart; migrations run automatically.
 
 > If your fork has a different repository name, change `image:` (and `icon:`) in the file to `ghcr.io/<owner>/<repo>`.
 
@@ -185,7 +185,7 @@ docker compose exec app migrate-ghost --file /data/uploads/ghost-export.json
 docker compose exec app migrate-ghost --scrape https://artyomtechtips.com
 ```
 
-On ZimaOS, open the app's terminal from the dashboard (or `docker exec -it artem-blog sh`) and run `migrate-ghost --scrape https://artyomtechtips.com`.
+On ZimaOS, open the app's terminal from the dashboard (or `docker exec -it idea sh`) and run `migrate-ghost --scrape https://artyomtechtips.com`.
 
 **Options:**
 
@@ -225,7 +225,7 @@ docker compose exec -T db pg_dump -U blog -d blog --clean --if-exists > blog-$(d
 Images:
 
 ```bash
-docker run --rm -v artem-blog_uploads:/data -v "$PWD":/backup alpine tar czf /backup/uploads-$(date +%F).tar.gz -C /data .
+docker run --rm -v idea_uploads:/data -v "$PWD":/backup alpine tar czf /backup/uploads-$(date +%F).tar.gz -C /data .
 ```
 
 Restore (stop the app first so nothing writes during the restore):
@@ -239,14 +239,14 @@ docker compose exec -T db psql -U blog -d blog < blog-2026-01-01.sql
 ```
 
 ```bash
-docker run --rm -v artem-blog_uploads:/data -v "$PWD":/backup alpine sh -c "cd /data && tar xzf /backup/uploads-2026-01-01.tar.gz"
+docker run --rm -v idea_uploads:/data -v "$PWD":/backup alpine sh -c "cd /data && tar xzf /backup/uploads-2026-01-01.tar.gz"
 ```
 
 ```bash
 docker compose start app
 ```
 
-On ZimaOS, back up the folder `/DATA/AppData/artem-blog/`. The database files are only consistent while the app is stopped, so prefer `pg_dump` via `docker exec artem-blog-db pg_dump -U blog blog > dump.sql`.
+On ZimaOS, back up the folder `/DATA/AppData/idea/`. The database files are only consistent while the app is stopped, so prefer `pg_dump` via `docker exec idea-db pg_dump -U blog blog > dump.sql`.
 
 **Updating.**
 
@@ -330,7 +330,7 @@ All settings are environment variables, documented in [`.env.example`](.env.exam
 | `MAX_UPLOAD_MB` | `15` | Per image |
 | `TZ` | `UTC` | Timezone for displayed dates |
 | `APP_PORT` | `3000` | Host port (compose) |
-| `APP_IMAGE` | local build | e.g. `ghcr.io/essntl/blog-site:latest` |
+| `APP_IMAGE` | local build | e.g. `ghcr.io/essntl/idea:latest` |
 
 The site title, description, footer links, comment approval and comment on/off switches are edited in **Admin → Settings**. The footer defaults to artemk.dev, contact@artemk.dev and github.com/essntl.
 

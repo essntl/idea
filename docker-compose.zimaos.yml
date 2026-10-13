@@ -1,14 +1,14 @@
 # ZimaOS / CasaOS app definition.
 # Import via App Store → "+" (Install a customized app) → Import → paste or upload this file.
 # Edit every value marked CHANGE_ME in the app's settings before the first start.
-# Data lives in /DATA/AppData/artem-blog/{postgres,uploads} and survives restarts and updates.
+# Data lives in /DATA/AppData/idea/{postgres,uploads} and survives restarts and updates.
 
-name: artem-blog
+name: idea
 
 services:
   app:
-    image: ghcr.io/essntl/blog-site:latest
-    container_name: artem-blog
+    image: ghcr.io/essntl/idea:latest
+    container_name: idea
     restart: unless-stopped
     depends_on:
       db:
@@ -18,7 +18,7 @@ services:
       NEXTAUTH_SECRET: CHANGE_ME
       ADMIN_EMAIL: CHANGE_ME@example.com
       ADMIN_PASSWORD: CHANGE_ME
-      DATABASE_URL: postgresql://blog:CHANGE_ME_DB_PASSWORD@artem-blog-db:5432/blog
+      DATABASE_URL: postgresql://blog:CHANGE_ME_DB_PASSWORD@idea-db:5432/blog
       CAPTCHA_PROVIDER: turnstile
       TURNSTILE_SITE_KEY: 1x00000000000000000000AA
       TURNSTILE_SECRET_KEY: 1x0000000000000000000000000000000AA
@@ -33,7 +33,7 @@ services:
         protocol: tcp
     volumes:
       - type: bind
-        source: /DATA/AppData/artem-blog/uploads
+        source: /DATA/AppData/idea/uploads
         target: /data/uploads
     x-casaos:
       envs:
@@ -84,7 +84,7 @@ services:
 
   db:
     image: postgres:16-alpine
-    container_name: artem-blog-db
+    container_name: idea-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: blog
@@ -93,7 +93,7 @@ services:
       TZ: UTC
     volumes:
       - type: bind
-        source: /DATA/AppData/artem-blog/postgres
+        source: /DATA/AppData/idea/postgres
         target: /var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U blog -d blog"]
@@ -115,16 +115,16 @@ x-casaos:
     - amd64
     - arm64
   main: app
-  store_app_id: artem-blog
+  store_app_id: idea
   category: Blog
-  author: Artem
+  author: essntl
   developer: essntl
-  icon: https://raw.githubusercontent.com/essntl/blog-site/main/public/icon-256.png
+  icon: https://raw.githubusercontent.com/essntl/idea/main/public/icon-256.png
   index: /
   port_map: "3000"
   scheme: http
   title:
-    en_us: Artem Blog
+    en_us: idea
   tagline:
     en_us: Personal blog and articles
   description:

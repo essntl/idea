@@ -27,9 +27,9 @@ RUN npm run build && npm run build:scripts
 # ---------- runtime ----------
 FROM node:${NODE_VERSION}-bookworm-slim AS runner
 ARG VERSION=dev
-LABEL org.opencontainers.image.title="artem-blog" \
+LABEL org.opencontainers.image.title="idea" \
       org.opencontainers.image.description="Personal blog + articles (Next.js, PostgreSQL)" \
-      org.opencontainers.image.source="https://github.com/essntl/blog-site" \
+      org.opencontainers.image.source="https://github.com/essntl/idea" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.licenses="MIT"
 

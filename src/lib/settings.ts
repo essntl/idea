@@ -22,7 +22,7 @@ export const settingsSchema = z.object({
 export type Settings = z.infer<typeof settingsSchema>;
 
 export const DEFAULT_SETTINGS: Settings = {
-  siteTitle: "Artem",
+  siteTitle: "idea",
   siteDescription: "Diary notes and long-form articles about technology.",
   authorName: "Artem",
   portfolioUrl: "https://artemk.dev",
