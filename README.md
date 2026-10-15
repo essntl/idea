@@ -22,7 +22,8 @@ Built with Next.js 16, React 19, TypeScript, Tailwind CSS 4, PostgreSQL 16, Pris
 7. [Backup, restore and updates](#backup-restore-and-updates)
 8. [Local development](#local-development)
 9. [Configuration reference](#configuration-reference)
-10. [Project layout](#project-layout)
+10. [Icon and branding](#icon-and-branding)
+11. [Project layout](#project-layout)
 
 ---
 
@@ -350,9 +351,27 @@ The site title, description, footer links, GitHub activity, comment approval and
 
 ---
 
+## Icon and branding
+
+The icon (an italic *i* followed by a text cursor) lives in [`branding/icon.svg`](branding/icon.svg); every other size is generated from it with `node scripts/make-icons.mjs`:
+
+| File | Used for |
+|---|---|
+| `src/app/favicon.ico` (16/32/48), `src/app/icon.svg`, `src/app/apple-icon.png` | Browser tab, bookmarks, iOS home screen |
+| `public/icon-256.png` | ZimaOS / CasaOS app icon (`x-casaos.icon` in `docker-compose.zimaos.yml`) |
+| `branding/icon-512.png`, `branding/icon-1024.png` | GitHub / Docker Hub avatar (rounded tile) |
+| `branding/avatar-1024.png` | Same, full-bleed square for services that crop to a circle |
+| `branding/social-preview.png` (1280×640) | GitHub → repository **Settings → Social preview** |
+| `branding/icon-mark.svg` | The mark alone, `currentColor`, for use on any background |
+
+GitHub doesn't support per-repository avatars and GHCR has no image icon, so upload `avatar-1024.png` as your GitHub (or Docker Hub) profile picture if you want it there, and `social-preview.png` as the repository's link preview.
+
+---
+
 ## Project layout
 
 ```
+branding/              icon sources and exports (see Icon and branding)
 src/app/(site)/        public pages (blog, articles, projects, about, search)
 src/app/admin/         admin pages (panel, login, preview)
 src/app/api/           route handlers (comments, admin API, auth, health)
