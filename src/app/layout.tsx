@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
-import { headers } from "next/headers";
+import { cookies } from "next/headers";
 import { getSettings } from "@/lib/settings";
 import { siteUrl } from "@/lib/env";
 import "./globals.css";
@@ -20,7 +20,6 @@ const interCyrillic = localFont({
   preload: false,
 });
 
-const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d)}catch(e){}})()`;
 
 export async function generateMetadata(): Promise<Metadata> {
   const s = await getSettings();
@@ -46,12 +45,11 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
+  // An explicit theme choice (cookie) is rendered here so React owns the class; otherwise CSS follows the system.
+  const theme = (await cookies()).get("theme")?.value;
+  const themeClass = theme === "dark" || theme === "light" ? theme : "";
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${interCyrillic.variable}`}>
-      <head>
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
-      </head>
+    <html lang="en" className={`${inter.variable} ${interCyrillic.variable} ${themeClass}`.trim()}>
       <body>{children}</body>
     </html>
   );

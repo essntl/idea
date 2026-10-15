@@ -1,6 +1,7 @@
 "use client";
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { isDarkTheme } from "@/components/site/theme-toggle";
 
 export type CaptchaProps = { provider: "turnstile" | "recaptcha"; siteKey: string };
 export type CaptchaHandle = { getToken: () => Promise<string>; reset: () => void };
@@ -56,7 +57,7 @@ export const Captcha = forwardRef<CaptchaHandle, CaptchaProps>(function Captcha(
           const narrow = box.current.clientWidth < 300;
           widgetId.current = window.turnstile.render(box.current, {
             sitekey: siteKey,
-            theme: document.documentElement.classList.contains("dark") ? "dark" : "light",
+            theme: isDarkTheme() ? "dark" : "light",
             size: narrow ? "compact" : "normal",
             "refresh-expired": "auto",
             callback: (t: string) => (token.current = t),

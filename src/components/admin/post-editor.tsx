@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Editor } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
 import { RichEditor } from "./editor/rich-editor";
@@ -72,6 +72,10 @@ function toLocalInput(iso: string | null) {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 }
 const fromLocalInput = (v: string) => (v ? new Date(v).toISOString() : null);
+
+/** False during server rendering and hydration: local times are only formatted in the browser, so they can't mismatch. */
+const noopSubscribe = () => () => {};
+const useMounted = () => useSyncExternalStore(noopSubscribe, () => true, () => false);
 
 const LIST_URL: Record<EditorKind, string> = { blog: "/admin/blog", article: "/admin/articles", project: "/admin/projects", page: "/admin" };
 
@@ -409,7 +413,8 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
   const onContentChange = useCallback((doc: JSONContent) => update("contentJson", doc), [update]);
 
   const hasChanges = dirty || !!pendingAt;
-  const time = (d: Date) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const mounted = useMounted();
+  const time = (d: Date) => (mounted ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "");
   const lastSaved = savedAt ?? (pendingAt ? new Date(pendingAt) : null);
   // Primary action: publish for drafts, "Publish changes" for live content with pending edits.
   const primary =
@@ -428,9 +433,9 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
       ? "Editing…"
       : isLive
         ? pendingAt
-          ? `Unpublished changes · saved ${lastSaved ? time(lastSaved) : ""}`
+          ? `Unpublished changes${lastSaved && mounted ? ` · saved ${time(lastSaved)}` : ""}`
           : "Published · up to date"
-        : `Draft${lastSaved ? ` · saved ${time(lastSaved)}` : ""}`;
+        : `Draft${lastSaved && mounted ? ` · saved ${time(lastSaved)}` : ""}`;
 
   const label = "mb-1 block text-sm font-medium";
   const imageField = (
@@ -489,7 +494,7 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
           ) : (
             <div>
               <label htmlFor="publishedAt" className={label}>{state.status === "scheduled" ? "Publish at" : "Publish date"}</label>
-              <input id="publishedAt" type="datetime-local" className="field" value={toLocalInput(state.publishedAt)} onChange={(e) => update("publishedAt", fromLocalInput(e.target.value))} />
+              <input id="publishedAt" type="datetime-local" className="field" value={mounted ? toLocalInput(state.publishedAt) : ""} onChange={(e) => update("publishedAt", fromLocalInput(e.target.value))} />
               <p className="mt-1 text-xs text-muted">{state.status === "scheduled" ? "Goes live automatically at this time." : "Leave empty to use the time of publishing. Can be backdated."}</p>
             </div>
           )}

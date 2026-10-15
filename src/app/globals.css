@@ -1,6 +1,20 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
+/*
+  Theme: html.dark / html.light are rendered by the server from the "theme" cookie (an explicit choice);
+  with neither class the site follows the system setting. Rendering it server-side means React re-renders
+  can never drop it.
+*/
+@custom-variant dark {
+  &:where(.dark, .dark *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not(.light), :root:not(.light) *) {
+      @slot;
+    }
+  }
+}
 
 /* ------------------------------------------------------------------ tokens */
 :root {
@@ -17,7 +31,7 @@
   color-scheme: light;
 }
 
-.dark {
+:root.dark {
   --bg: #0a0a0a;
   --fg: #f2f2f2;
   --muted: #a6a6a6;
@@ -29,6 +43,22 @@
   --focus: #f2f2f2;
   --shadow-float: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.5);
   color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --bg: #0a0a0a;
+    --fg: #f2f2f2;
+    --muted: #a6a6a6;
+    --subtle: #7a7a7a;
+    --line: #262626;
+    --line-strong: #3d3d3d;
+    --surface: #151515;
+    --surface-2: #222222;
+    --focus: #f2f2f2;
+    --shadow-float: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.5);
+    color-scheme: dark;
+  }
 }
 
 @theme inline {
@@ -291,8 +321,12 @@ a, button, input, textarea, select, summary {
 }
 .prose pre.shiki { background-color: var(--shiki-light-bg); }
 .prose pre.shiki span { color: var(--shiki-light); font-weight: var(--shiki-light-font-weight, inherit); font-style: var(--shiki-light-font-style, inherit); }
-.dark .prose pre.shiki { background-color: var(--shiki-dark-bg); }
-.dark .prose pre.shiki span { color: var(--shiki-dark); font-weight: var(--shiki-dark-font-weight, inherit); font-style: var(--shiki-dark-font-style, inherit); }
+:root.dark .prose pre.shiki { background-color: var(--shiki-dark-bg); }
+:root.dark .prose pre.shiki span { color: var(--shiki-dark); font-weight: var(--shiki-dark-font-weight, inherit); font-style: var(--shiki-dark-font-style, inherit); }
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .prose pre.shiki { background-color: var(--shiki-dark-bg); }
+  :root:not(.light) .prose pre.shiki span { color: var(--shiki-dark); font-weight: var(--shiki-dark-font-weight, inherit); font-style: var(--shiki-dark-font-style, inherit); }
+}
 .prose figure { margin-inline: auto; }
 .prose figure[data-size="25"] { width: 25%; }
 .prose figure[data-size="50"] { width: 50%; }
@@ -410,8 +444,12 @@ a, button, input, textarea, select, summary {
 }
 .prose-comment pre.shiki { background-color: var(--shiki-light-bg); }
 .prose-comment pre.shiki span { color: var(--shiki-light); font-weight: var(--shiki-light-font-weight, inherit); font-style: var(--shiki-light-font-style, inherit); }
-.dark .prose-comment pre.shiki { background-color: var(--shiki-dark-bg); }
-.dark .prose-comment pre.shiki span { color: var(--shiki-dark); font-weight: var(--shiki-dark-font-weight, inherit); font-style: var(--shiki-dark-font-style, inherit); }
+:root.dark .prose-comment pre.shiki { background-color: var(--shiki-dark-bg); }
+:root.dark .prose-comment pre.shiki span { color: var(--shiki-dark); font-weight: var(--shiki-dark-font-weight, inherit); font-style: var(--shiki-dark-font-style, inherit); }
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) .prose-comment pre.shiki { background-color: var(--shiki-dark-bg); }
+  :root:not(.light) .prose-comment pre.shiki span { color: var(--shiki-dark); font-weight: var(--shiki-dark-font-weight, inherit); font-style: var(--shiki-dark-font-style, inherit); }
+}
 
 /* Comment editor (TipTap) */
 .comment-editor .ProseMirror { min-height: 5.5rem; outline: none; padding: 0.625rem 0.75rem; }
