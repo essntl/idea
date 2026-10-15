@@ -95,6 +95,10 @@ Both survive restarts, updates and reinstalls. To update, use **Check for update
 
 > If your fork has a different repository name, change `image:` (and `icon:`) in the file to `ghcr.io/<owner>/<repo>`.
 
+> **`getaddrinfo ENOTFOUND idea-db` in the app log** means the two containers aren't on the same network. In the app settings, set **Network type** to `idea` for both the `app` and `db` services (not `bridge`: Docker's default bridge network can't resolve container names), save, and restart.
+>
+> Keep `: @ / ? #` out of the database password, or percent-encode them inside `DATABASE_URL` (e.g. `:` → `%3A`).
+
 ---
 
 ## HTTPS: reverse proxy or Cloudflare Tunnel

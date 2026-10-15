@@ -10,6 +10,10 @@ services:
     image: ghcr.io/essntl/idea:latest
     container_name: idea
     restart: unless-stopped
+    # Both containers must share this network: the app reaches the database as "idea-db".
+    # (Docker's default "bridge" network has no name resolution between containers.)
+    networks:
+      - idea
     depends_on:
       db:
         condition: service_healthy
@@ -90,6 +94,8 @@ services:
     image: postgres:16-alpine
     container_name: idea-db
     restart: unless-stopped
+    networks:
+      - idea
     environment:
       POSTGRES_USER: blog
       POSTGRES_PASSWORD: CHANGE_ME_DB_PASSWORD
@@ -113,6 +119,10 @@ services:
         - container: /var/lib/postgresql/data
           description:
             en_us: PostgreSQL data
+
+networks:
+  idea:
+    name: idea
 
 x-casaos:
   architectures:
