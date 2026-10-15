@@ -1,5 +1,10 @@
 /** Position for a popover anchored to a trigger, kept inside the viewport (used by Select and Menu). */
-export type AnchoredPosition = { left: number; top: number; minWidth: number; maxHeight: number; above: boolean };
+export type AnchoredPosition = {
+  /** Ready-to-use fixed-position style. Popovers above the trigger are anchored by `bottom`, so no transform is needed
+   * (a transform would fight the open animation and make the popover jump). */
+  style: { position: "fixed"; left: number; top?: number; bottom?: number; minWidth: number; maxHeight: number };
+  above: boolean;
+};
 
 export function anchorTo(
   rect: DOMRect,
@@ -14,5 +19,6 @@ export function anchorTo(
   const minWidth = Math.max(opts.align === "end" ? 0 : rect.width, opts.minWidth ?? 160);
   const preferred = opts.align === "end" ? rect.right - minWidth : rect.left;
   const left = Math.max(8, Math.min(preferred, window.innerWidth - minWidth - 8));
-  return { left, top: showAbove ? rect.top - 4 : rect.bottom + 4, minWidth, maxHeight, above: showAbove };
+  const vertical = showAbove ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 };
+  return { style: { position: "fixed", left, minWidth, maxHeight, ...vertical }, above: showAbove };
 }

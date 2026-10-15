@@ -102,6 +102,18 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
   const [pickerOpen, setPickerOpen] = useState(false);
   const [cropping, setCropping] = useState(false);
   const editorRef = useRef<Editor | null>(null);
+  const [toolbarHost, setToolbarHost] = useState<HTMLDivElement | null>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(112);
+
+  // The sidebar sticks below the header, whose height changes when the formatting bar wraps.
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setHeaderHeight(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const stateRef = useRef(state);
   const version = useRef(0);
   const savedVersion = useRef(0);
@@ -625,85 +637,98 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
   ];
 
   return (
-    <div className="mx-auto max-w-6xl">
-      {/* Top bar: back + status on the left, one joined control group on the right. */}
-      <div className="sticky top-14 z-30 -mx-4 mb-5 flex items-center gap-2 border-b border-line bg-bg/90 px-4 py-2 backdrop-blur-md sm:mx-0 sm:rounded-[var(--radius-lg)] sm:border sm:px-2 lg:top-3">
-        <Link href={LIST_URL[kind]} className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-muted hover:bg-surface-2 hover:text-fg" aria-label="Back">
-          <ArrowLeft width={18} height={18} />
-        </Link>
-        <span className="min-w-0 flex-1 truncate text-sm text-muted" role="status" aria-live="polite" title={statusText}>
-          <span className="sm:hidden">{shortStatus}</span>
-          <span className="hidden sm:inline">{statusText}</span>
-        </span>
-        <div className="flex shrink-0 items-center gap-0.5">
-          <button type="button" onClick={preview} title="Preview" aria-label="Preview" className="flex size-10 items-center justify-center rounded-[var(--radius-md)] text-muted hover:bg-surface-2 hover:text-fg">
-            <EyeIcon width={19} height={19} />
-          </button>
-          {kind !== "page" && (
-            <button
-              type="button"
-              onClick={() => setSheetOpen(true)}
-              aria-expanded={sheetOpen}
-              title="Settings"
-              aria-label="Settings"
-              className="flex size-10 items-center justify-center rounded-[var(--radius-md)] text-muted hover:bg-surface-2 hover:text-fg lg:hidden"
-            >
-              <SlidersIcon width={19} height={19} />
-            </button>
-          )}
-          <Menu items={menuItems} label="More editor actions" />
-          <button
-            type="button"
-            className="btn btn-sm ml-1.5 min-h-10 px-4"
-            onClick={() => void save()}
-            disabled={saving || primary.disabled || (hasSlug && slugCheck?.ok === false)}
-          >
-            {primary.label}
-          </button>
+    <div style={{ "--editor-header": `${headerHeight}px` } as React.CSSProperties}>
+      {/*
+        Fixed editor header, like a word processor: actions on top, the formatting bar below (md+). It is solid and
+        spans the whole content area, so the text scrolls cleanly underneath and nothing overlaps the sidebar.
+      */}
+      <div ref={headerRef} className="sticky top-14 z-30 -mx-4 -mt-6 mb-6 border-b border-line bg-bg sm:-mx-6 lg:top-0 lg:-mx-10 lg:-mt-10">
+        <div className="px-2 sm:px-4 lg:px-8">
+          <div className="mx-auto flex h-14 max-w-6xl items-center gap-2">
+            <Link href={LIST_URL[kind]} className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-muted hover:bg-surface-2 hover:text-fg" aria-label="Back">
+              <ArrowLeft width={18} height={18} />
+            </Link>
+            <span className="min-w-0 flex-1 truncate text-sm text-muted" role="status" aria-live="polite" title={statusText}>
+              <span className="sm:hidden">{shortStatus}</span>
+              <span className="hidden sm:inline">{statusText}</span>
+            </span>
+            <div className="flex shrink-0 items-center gap-0.5">
+              <button type="button" onClick={preview} title="Preview" aria-label="Preview" className="flex size-10 items-center justify-center rounded-[var(--radius-md)] text-muted hover:bg-surface-2 hover:text-fg">
+                <EyeIcon width={19} height={19} />
+              </button>
+              {kind !== "page" && (
+                <button
+                  type="button"
+                  onClick={() => setSheetOpen(true)}
+                  aria-expanded={sheetOpen}
+                  title="Settings"
+                  aria-label="Settings"
+                  className="flex size-10 items-center justify-center rounded-[var(--radius-md)] text-muted hover:bg-surface-2 hover:text-fg lg:hidden"
+                >
+                  <SlidersIcon width={19} height={19} />
+                </button>
+              )}
+              <Menu items={menuItems} label="More editor actions" />
+              <button
+                type="button"
+                className="btn btn-sm ml-1.5 min-h-10 px-4"
+                onClick={() => void save()}
+                disabled={saving || primary.disabled || (hasSlug && slugCheck?.ok === false)}
+              >
+                {primary.label}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="hidden border-t border-line px-2 sm:px-4 md:block lg:px-8">
+          <div ref={setToolbarHost} className="mx-auto max-w-6xl" />
         </div>
       </div>
-      {isLive && pendingAt && (
-        <p className="mb-4 text-sm text-muted" role="note">
-          Editing unpublished changes. Visitors see the published version until you publish.
-        </p>
-      )}
-      {message && (
-        <p role={message.kind === "error" ? "alert" : "status"} className={`mb-4 rounded-[var(--radius-md)] border px-3 py-2 text-sm ${message.kind === "error" ? "border-fg font-medium" : "border-line text-muted"}`}>
-          {message.text}
-        </p>
-      )}
+      <div className={kind === "page" ? "mx-auto max-w-3xl" : "mx-auto max-w-6xl"}>
+        {isLive && pendingAt && (
+          <p className="mb-4 text-sm text-muted" role="note">
+            Editing unpublished changes. Visitors see the published version until you publish.
+          </p>
+        )}
+        {message && (
+          <p role={message.kind === "error" ? "alert" : "status"} className={`mb-4 rounded-[var(--radius-md)] border px-3 py-2 text-sm ${message.kind === "error" ? "border-fg font-medium" : "border-line text-muted"}`}>
+            {message.text}
+          </p>
+        )}
 
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-10">
-        <div className="min-w-0">
-          <label htmlFor="title" className="sr-only">Title</label>
-          <textarea
-            id="title"
-            rows={1}
-            className="mb-4 field-sizing-content w-full resize-none overflow-hidden bg-transparent text-3xl leading-tight font-semibold tracking-tight outline-none placeholder:text-subtle sm:text-4xl"
-            placeholder="Untitled"
-            value={state.title}
-            maxLength={200}
-            onChange={(e) => update("title", e.target.value.replace(/\n/g, " "))}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                editorRef.current?.commands.focus("start");
-              }
-            }}
-          />
-          <RichEditor content={initial.contentJson} onChange={onContentChange} onReady={onReady} />
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-10">
+          <div className="min-w-0">
+            <label htmlFor="title" className="sr-only">Title</label>
+            <textarea
+              id="title"
+              rows={1}
+              className="mb-4 field-sizing-content w-full resize-none overflow-hidden bg-transparent text-3xl leading-tight font-semibold tracking-tight outline-none placeholder:text-subtle sm:text-4xl"
+              placeholder="Untitled"
+              value={state.title}
+              maxLength={200}
+              onChange={(e) => update("title", e.target.value.replace(/\n/g, " "))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  editorRef.current?.commands.focus("start");
+                }
+              }}
+            />
+            <RichEditor content={initial.contentJson} onChange={onContentChange} onReady={onReady} toolbarHost={toolbarHost} />
+          </div>
+
+          {kind !== "page" && (
+            <>
+              <aside className="hidden lg:block" aria-label="Post settings">
+                <div className="sticky top-[calc(var(--editor-header)+1.5rem)] max-h-[calc(100dvh-var(--editor-header)-3rem)] overflow-y-auto pb-6">{sidebar}</div>
+              </aside>
+              <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={kind === "blog" ? "Post settings" : kind === "project" ? "Project settings" : "Article settings"}>
+                <div className="pt-1">{sidebar}</div>
+              </Sheet>
+            </>
+          )}
         </div>
 
-        {kind !== "page" && (
-          <>
-            <aside className="hidden lg:block" aria-label="Post settings">
-              <div className="sticky top-6 max-h-[calc(100dvh-3rem)] overflow-y-auto pb-6">{sidebar}</div>
-            </aside>
-            <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={kind === "blog" ? "Post settings" : kind === "project" ? "Project settings" : "Article settings"}>
-              <div className="pt-1">{sidebar}</div>
-            </Sheet>
-          </>
-        )}
       </div>
 
       <MediaPicker

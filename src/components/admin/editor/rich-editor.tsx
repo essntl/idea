@@ -5,12 +5,17 @@ import { BubbleMenu } from "@tiptap/react/menus";
 import type { JSONContent } from "@tiptap/core";
 import { Placeholder } from "@tiptap/extensions";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { schemaExtensions, TEXT_COLORS } from "@/lib/content/extensions";
 import { toggleCodeBlock } from "@/lib/content/editor-commands";
 import { EditorCodeBlock, EditorEmbed, EditorFigure } from "./node-views";
 import { createSlashCommand, SLASH_ITEMS, type SlashActions } from "./slash-command";
 import { Sheet } from "@/components/ui/sheet";
-import { PlusIcon } from "@/components/ui/icons";
+import {
+  CodeBlockIcon, CodeIcon, EraserIcon, HighlightIcon, ImageIcon, LinkIcon, ListCheckIcon, ListIcon, ListOrderedIcon, PlusIcon,
+  QuoteIcon, RedoIcon, TableIcon, TextColorIcon, TrashIcon, UndoIcon,
+} from "@/components/ui/icons";
+import { Menu, type MenuItem } from "@/components/ui/menu";
 import { isImageFile, pickFiles, uploadImages, type MediaItem } from "./upload";
 import { MediaPicker } from "../media-picker";
 import { Select } from "@/components/ui/select";
@@ -21,9 +26,11 @@ type Props = {
   placeholder?: string;
   /** Called once the editor exists, e.g. to replace content after a markdown import. */
   onReady?: (editor: Editor) => void;
+  /** Element the formatting bar renders into (the editor's fixed header). Phones have no bar. */
+  toolbarHost?: HTMLElement | null;
 };
 
-export function RichEditor({ content, onChange, placeholder = "Write something, or type “/” for commands…", onReady }: Props) {
+export function RichEditor({ content, onChange, placeholder = "Write something, or type “/” for commands…", onReady, toolbarHost }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const editorRef = useRef<Editor | null>(null);
@@ -110,7 +117,7 @@ export function RichEditor({ content, onChange, placeholder = "Write something, 
 
   return (
     <div className="editor">
-      {editor && <Toolbar editor={editor} onImage={actions.pickImage} onLibrary={() => setPickerOpen(true)} />}
+      {editor && toolbarHost && createPortal(<Toolbar editor={editor} actions={actions} />, toolbarHost)}
       {editor && <SelectionMenu editor={editor} />}
       <EditorContent editor={editor} />
       {editor && <MobileInsert editor={editor} actions={actions} />}
@@ -222,7 +229,7 @@ function Btn({ label, active, disabled, onClick, children }: { label: string; ac
       disabled={disabled}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className={`inline-flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-sm disabled:opacity-30 ${active ? "bg-fg text-bg" : "text-muted hover:bg-surface-2 hover:text-fg"}`}
+      className={`inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] px-1 text-sm disabled:opacity-30 ${active ? "bg-fg text-bg" : "text-muted hover:bg-surface-2 hover:text-fg"}`}
     >
       {children}
     </button>
@@ -252,68 +259,104 @@ function useMarks(editor: Editor) {
       codeBlock: e.isActive("codeBlock"),
       table: e.isActive("table"),
       color: (e.getAttributes("textStyle").color as string | undefined) ?? null,
+      words: e.state.doc.textBetween(0, e.state.doc.content.size, " ", " ").split(/\s+/).filter(Boolean).length,
       canUndo: e.can().undo(),
       canRedo: e.can().redo(),
     }),
   });
 }
 
-function Toolbar({ editor, onImage, onLibrary }: { editor: Editor; onImage: () => void; onLibrary: () => void }) {
+/** Insert-menu entries, shared with the "/" command list. */
+const INSERT_TITLES = ["Image", "Image from library", "Table", "Callout", "YouTube", "Link card", "Divider"] as const;
+
+/**
+ * Word-style formatting bar. PostEditor renders it into its fixed header, so it spans the full width and never
+ * floats over the text or the settings sidebar.
+ */
+function Toolbar({ editor, actions }: { editor: Editor; actions: SlashActions }) {
   const s = useMarks(editor);
   const c = () => editor.chain().focus();
   const block = s.h1 ? "h1" : s.h2 ? "h2" : s.h3 ? "h3" : "p";
+  const at = () => ({ from: editor.state.selection.from, to: editor.state.selection.from });
+  const insertItems: MenuItem[] = INSERT_TITLES.map((title) => {
+    const item = SLASH_ITEMS.find((i) => i.title === title)!;
+    return { label: item.title, onSelect: () => item.run(editor, at(), actions) };
+  });
+  insertItems.splice(2, 0, "separator");
+  insertItems.splice(insertItems.length - 1, 0, "separator");
   return (
-    <div className="sticky top-[7.5rem] z-20 hidden rounded-[var(--radius-lg)] border border-line bg-bg/90 px-1.5 backdrop-blur-md md:block lg:top-[4.75rem]" role="toolbar" aria-label="Formatting">
-      <div className="flex flex-wrap items-center py-1">
-        <Btn label="Undo" disabled={!s.canUndo} onClick={() => c().undo().run()}>↶</Btn>
-        <Btn label="Redo" disabled={!s.canRedo} onClick={() => c().redo().run()}>↷</Btn>
-        <Sep />
-        <Select
-          aria-label="Block type"
-          preserveFocus
-          className="h-9 min-h-9 w-32 shrink-0 text-sm text-muted hover:bg-surface-2 hover:text-fg"
-          value={block}
-          onChange={(v) => {
-            if (v === "p") c().setParagraph().run();
-            else c().setHeading({ level: Number(v[1]) as 1 | 2 | 3 }).run();
-          }}
-          options={[
-            { value: "p", label: "Paragraph" },
-            { value: "h1", label: "Heading 1" },
-            { value: "h2", label: "Heading 2" },
-            { value: "h3", label: "Heading 3" },
-          ]}
-        />
-        <Sep />
-        <Btn label="Bold" active={s.bold} onClick={() => c().toggleBold().run()}><b>B</b></Btn>
-        <Btn label="Italic" active={s.italic} onClick={() => c().toggleItalic().run()}><i>I</i></Btn>
-        <Btn label="Underline" active={s.underline} onClick={() => c().toggleUnderline().run()}><u>U</u></Btn>
-        <Btn label="Strikethrough" active={s.strike} onClick={() => c().toggleStrike().run()}><s>S</s></Btn>
-        <Btn label="Inline code" active={s.code} onClick={() => c().toggleCode().run()}><code>{"<>"}</code></Btn>
-        <Btn label="Link" active={s.link} onClick={() => setLink(editor)}>🔗︎</Btn>
-        <Btn label="Highlight" active={s.highlight} onClick={() => c().toggleHighlight().run()}><mark className="rounded-sm bg-surface-2 px-0.5 text-fg">H</mark></Btn>
-        <Sep />
-        <Btn label="Bulleted list" active={s.bullet} onClick={() => c().toggleBulletList().run()}>•≡</Btn>
-        <Btn label="Numbered list" active={s.ordered} onClick={() => c().toggleOrderedList().run()}>1.</Btn>
-        <Btn label="To-do list" active={s.task} onClick={() => c().toggleTaskList().run()}>☑︎</Btn>
-        <Btn label="Quote" active={s.quote} onClick={() => c().toggleBlockquote().run()}>❝</Btn>
-        <Btn label="Code block" active={s.codeBlock} onClick={() => toggleCodeBlock(editor)}>{"{}"}</Btn>
-        <Btn label="Divider" onClick={() => c().setHorizontalRule().run()}>—</Btn>
-        <Sep />
-        <Btn label="Upload image" onClick={onImage}>▣</Btn>
-        <Btn label="Image from library" onClick={onLibrary}>▤</Btn>
-        <Btn label="Insert table" onClick={() => c().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>⊞</Btn>
-        {s.table && (
+    <div className="flex flex-wrap items-center gap-y-1 py-1.5" role="toolbar" aria-label="Formatting">
+      <Btn label="Undo (Ctrl+Z)" disabled={!s.canUndo} onClick={() => c().undo().run()}><UndoIcon width={18} height={18} /></Btn>
+      <Btn label="Redo (Ctrl+Shift+Z)" disabled={!s.canRedo} onClick={() => c().redo().run()}><RedoIcon width={18} height={18} /></Btn>
+      <Sep />
+      <Select
+        aria-label="Block type"
+        preserveFocus
+        className="h-9 min-h-9 w-32 shrink-0 text-sm text-muted hover:bg-surface-2 hover:text-fg"
+        value={block}
+        onChange={(v) => {
+          if (v === "p") c().setParagraph().run();
+          else c().setHeading({ level: Number(v[1]) as 1 | 2 | 3 }).run();
+        }}
+        options={[
+          { value: "p", label: "Paragraph" },
+          { value: "h1", label: "Heading 1" },
+          { value: "h2", label: "Heading 2" },
+          { value: "h3", label: "Heading 3" },
+        ]}
+      />
+      <Sep />
+      <Btn label="Bold (Ctrl+B)" active={s.bold} onClick={() => c().toggleBold().run()}><b>B</b></Btn>
+      <Btn label="Italic (Ctrl+I)" active={s.italic} onClick={() => c().toggleItalic().run()}><i className="font-serif">I</i></Btn>
+      <Btn label="Underline (Ctrl+U)" active={s.underline} onClick={() => c().toggleUnderline().run()}><u>U</u></Btn>
+      <Btn label="Strikethrough" active={s.strike} onClick={() => c().toggleStrike().run()}><s>S</s></Btn>
+      <Btn label="Inline code" active={s.code} onClick={() => c().toggleCode().run()}><CodeIcon width={18} height={18} /></Btn>
+      <Btn label="Highlight" active={s.highlight} onClick={() => c().toggleHighlight().run()}><HighlightIcon width={18} height={18} /></Btn>
+      <Btn label="Link" active={s.link} onClick={() => setLink(editor)}><LinkIcon width={18} height={18} /></Btn>
+      <Menu
+        label="Text color"
+        className="!min-h-9 !min-w-9 !rounded-[var(--radius-sm)]"
+        trigger={<TextColorIcon width={18} height={18} style={{ color: s.color ?? undefined }} />}
+        items={TEXT_COLORS.map((col) => ({
+          label: col.label,
+          icon: <span aria-hidden="true" className="size-3 rounded-full border border-line-strong" style={{ background: col.value ?? "var(--fg)" }} />,
+          onSelect: () => void (col.value ? c().setColor(col.value).run() : c().unsetColor().run()),
+        }))}
+      />
+      <Btn label="Clear formatting" onClick={() => c().unsetAllMarks().clearNodes().run()}><EraserIcon width={18} height={18} /></Btn>
+      <Sep />
+      <Btn label="Bulleted list" active={s.bullet} onClick={() => c().toggleBulletList().run()}><ListIcon width={18} height={18} /></Btn>
+      <Btn label="Numbered list" active={s.ordered} onClick={() => c().toggleOrderedList().run()}><ListOrderedIcon width={18} height={18} /></Btn>
+      <Btn label="To-do list" active={s.task} onClick={() => c().toggleTaskList().run()}><ListCheckIcon width={18} height={18} /></Btn>
+      <Btn label="Quote" active={s.quote} onClick={() => c().toggleBlockquote().run()}><QuoteIcon width={18} height={18} /></Btn>
+      <Btn label="Code block" active={s.codeBlock} onClick={() => toggleCodeBlock(editor)}><CodeBlockIcon width={18} height={18} /></Btn>
+      <Sep />
+      <Btn label="Upload image" onClick={actions.pickImage}><ImageIcon width={18} height={18} /></Btn>
+      <Btn label="Insert table" onClick={() => c().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><TableIcon width={18} height={18} /></Btn>
+      <Menu
+        label="Insert"
+        className="!min-h-9 gap-1 !rounded-[var(--radius-sm)] px-2.5 text-sm"
+        trigger={
           <>
-            <Sep />
-            <Btn label="Add row below" onClick={() => c().addRowAfter().run()}>+R</Btn>
-            <Btn label="Add column right" onClick={() => c().addColumnAfter().run()}>+C</Btn>
-            <Btn label="Delete row" onClick={() => c().deleteRow().run()}>−R</Btn>
-            <Btn label="Delete column" onClick={() => c().deleteColumn().run()}>−C</Btn>
-            <Btn label="Delete table" onClick={() => c().deleteTable().run()}>✕</Btn>
+            <PlusIcon width={16} height={16} /> Insert
           </>
-        )}
-      </div>
+        }
+        items={insertItems}
+      />
+      {s.table && (
+        <>
+          <Sep />
+          <span className="mr-1 text-xs text-subtle">Table</span>
+          <Btn label="Add row below" onClick={() => c().addRowAfter().run()}><span className="text-xs">+Row</span></Btn>
+          <Btn label="Add column right" onClick={() => c().addColumnAfter().run()}><span className="text-xs">+Col</span></Btn>
+          <Btn label="Delete row" onClick={() => c().deleteRow().run()}><span className="text-xs">&minus;Row</span></Btn>
+          <Btn label="Delete column" onClick={() => c().deleteColumn().run()}><span className="text-xs">&minus;Col</span></Btn>
+          <Btn label="Delete table" onClick={() => c().deleteTable().run()}><TrashIcon width={16} height={16} /></Btn>
+        </>
+      )}
+      <p className="ml-auto hidden pl-3 text-xs whitespace-nowrap text-subtle tabular-nums xl:block">
+        {s.words.toLocaleString("en")} word{s.words === 1 ? "" : "s"} · {Math.max(1, Math.round(s.words / 220))} min read
+      </p>
     </div>
   );
 }

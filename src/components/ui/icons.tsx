@@ -36,3 +36,16 @@ export const ForkIcon = (p: P) => (<svg {...base} {...p}><circle cx="6" cy="5" r
 export const FlameIcon = (p: P) => (<svg {...base} {...p}><path d="M12 21c3.9 0 7-2.8 7-6.7 0-3.5-2.4-5.7-4-8.3-.6 2-1.6 3.3-3 4-.2-3.1-1.6-5.6-4-7 .3 3.6-3 6.2-3 10.3C5 18.2 8.1 21 12 21Z" /><path d="M12 21c-1.7 0-3-1.2-3-2.9 0-1.8 1.6-2.8 2.5-4.6 1.4 1.3 3.5 2.6 3.5 4.6 0 1.7-1.3 2.9-3 2.9Z" /></svg>);
 export const CommitIcon = (p: P) => (<svg {...base} {...p}><circle cx="12" cy="12" r="3.5" /><path d="M3 12h5.5M15.5 12H21" /></svg>);
 export const TagIcon = (p: P) => (<svg {...base} {...p}><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9Z" /><circle cx="7.5" cy="7.5" r="1.3" /></svg>);
+export const TrophyIcon = (p: P) => (<svg {...base} {...p}><path d="M8 4h8v5a4 4 0 0 1-8 0V4Z" /><path d="M8 6H5a3 3 0 0 0 3 3.5M16 6h3a3 3 0 0 1-3 3.5M12 13v4M8.5 20h7M10 17h4" /></svg>);
+export const LinkIcon = (p: P) => (<svg {...base} {...p}><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>);
+export const ListIcon = (p: P) => (<svg {...base} {...p}><path d="M9 6h11M9 12h11M9 18h11" /><circle cx="4.5" cy="6" r="1" fill="currentColor" /><circle cx="4.5" cy="12" r="1" fill="currentColor" /><circle cx="4.5" cy="18" r="1" fill="currentColor" /></svg>);
+export const ListOrderedIcon = (p: P) => (<svg {...base} {...p}><path d="M10 6h10M10 12h10M10 18h10M4 5l1.5-1V9M3.8 14.2a1.4 1.4 0 0 1 2.5.9c0 .9-2.5 2.1-2.5 2.9h2.6" /></svg>);
+export const ListCheckIcon = (p: P) => (<svg {...base} {...p}><path d="M11 6h9M11 12h9M11 18h9" /><path d="m3.5 6 1.5 1.5L8 4.5M3.5 12l1.5 1.5L8 10.5" /><rect x="3.5" y="16" width="4" height="4" rx="1" /></svg>);
+export const QuoteIcon = (p: P) => (<svg {...base} {...p}><path d="M5 18h4v-4.5H6.5C6.5 10 7.5 8 10 7M14 18h4v-4.5h-2.5c0-3.5 1-5.5 3.5-6.5" /></svg>);
+export const CodeIcon = (p: P) => (<svg {...base} {...p}><path d="m8 7-5 5 5 5M16 7l5 5-5 5" /></svg>);
+export const CodeBlockIcon = (p: P) => (<svg {...base} {...p}><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="m9.5 9.5-2.5 2.5 2.5 2.5M14.5 9.5l2.5 2.5-2.5 2.5" /></svg>);
+export const HighlightIcon = (p: P) => (<svg {...base} {...p}><path d="m9 15 6.5-6.5a2.1 2.1 0 0 0-3-3L6 12l-.5 3.5L9 15Z" /><path d="M4 20h16" /></svg>);
+export const EraserIcon = (p: P) => (<svg {...base} {...p}><path d="M5 18 15.5 7.5M8 5h12M13 5l-4 14M7 19h6" /></svg>);
+export const ImageIcon = (p: P) => (<svg {...base} {...p}><rect x="3" y="4" width="18" height="16" rx="2.5" /><circle cx="9" cy="10" r="1.6" /><path d="m21 16-5-5-9 9" /></svg>);
+export const TableIcon = (p: P) => (<svg {...base} {...p}><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M3 10h18M3 15h18M10 10v10" /></svg>);
+export const TextColorIcon = (p: P) => (<svg {...base} {...p}><path d="m6.5 16 5.5-12 5.5 12M8.6 11.5h6.8" /><path d="M4 20h16" strokeWidth={2.4} /></svg>);

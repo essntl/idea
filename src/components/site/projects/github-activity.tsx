@@ -1,6 +1,6 @@
 import { getGithubProfile } from "@/lib/github";
 import { timeAgo } from "@/lib/format";
-import { ArrowRight, FlameIcon } from "@/components/ui/icons";
+import { ArrowRight, FlameIcon, TrophyIcon } from "@/components/ui/icons";
 import { ContributionGraph } from "./contribution-graph";
 
 const SHADES = ["bg-fg", "bg-fg/70", "bg-fg/50", "bg-fg/35", "bg-fg/20", "bg-fg/10"];
@@ -53,17 +53,18 @@ export async function GithubActivity({ login }: { login: string }) {
 
       {c && (
         <>
-          <div className="mt-6 flex flex-wrap items-baseline gap-x-6 gap-y-2">
-            <p className="flex items-center gap-2 text-[0.9375rem]">
-              <FlameIcon width={18} height={18} className={c.currentStreak ? "text-fg" : "text-subtle"} />
-              <span>
-                <span className="font-semibold">{days(c.currentStreak)}</span> <span className="text-muted">current streak</span>
-              </span>
-            </p>
-            <p className="text-[0.9375rem]">
-              <span className="font-semibold">{days(c.longestStreak)}</span> <span className="text-muted">longest streak</span>
-            </p>
-          </div>
+          <ul className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-[0.9375rem]">
+            <li className="flex items-center gap-2">
+              <FlameIcon width={18} height={18} className={`shrink-0 ${c.currentStreak ? "text-fg" : "text-subtle"}`} />
+              <span className="font-semibold">{days(c.currentStreak)}</span>
+              <span className="text-muted">current streak</span>
+            </li>
+            <li className="flex items-center gap-2">
+              <TrophyIcon width={18} height={18} className="shrink-0 text-muted" />
+              <span className="font-semibold">{days(c.longestStreak)}</span>
+              <span className="text-muted">longest streak</span>
+            </li>
+          </ul>
           <div className="mt-4">
             <ContributionGraph days={c.days} total={c.total} />
           </div>

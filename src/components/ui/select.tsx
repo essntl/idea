@@ -168,15 +168,8 @@ export function Select({
             role="listbox"
             aria-activedescendant={`${listId}-${active}`}
             onMouseDown={(e) => e.preventDefault()}
-            style={{
-              position: "fixed",
-              left: pos.left,
-              top: pos.top,
-              minWidth: pos.minWidth,
-              maxHeight: pos.maxHeight,
-              transform: pos.above ? "translateY(-100%)" : undefined,
-            }}
-            className="floating z-[70] animate-menu-in overflow-y-auto p-1 text-[0.9375rem] text-fg [scrollbar-width:thin]"
+            style={pos.style}
+            className={`floating z-[70] overflow-y-auto p-1 text-[0.9375rem] text-fg [scrollbar-width:thin] ${pos.above ? "animate-menu-up" : "animate-menu-in"}`}
           >
             {options.map((o, i) => (
               <li

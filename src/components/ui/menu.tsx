@@ -95,8 +95,8 @@ export function Menu({
             id={id}
             role="menu"
             aria-label={label}
-            style={{ position: "fixed", left: pos.left, top: pos.top, minWidth: pos.minWidth, maxHeight: pos.maxHeight, transform: pos.above ? "translateY(-100%)" : undefined }}
-            className="floating z-[70] animate-menu-in overflow-y-auto p-1"
+            style={pos.style}
+            className={`floating z-[70] overflow-y-auto p-1 ${pos.above ? "animate-menu-up" : "animate-menu-in"}`}
           >
             {items.map((item, i) =>
               item === "separator" ? (

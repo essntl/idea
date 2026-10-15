@@ -6,7 +6,7 @@ import { api } from "./api";
 import { CommentRow, type AdminComment } from "./comment-row";
 import { ActionBar } from "./action-bar";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Menu } from "@/components/ui/menu";
+import { Menu, type MenuItem } from "@/components/ui/menu";
 
 export function CommentsModeration({ comments }: { comments: AdminComment[] }) {
   const router = useRouter();
@@ -31,6 +31,25 @@ export function CommentsModeration({ comments }: { comments: AdminComment[] }) {
 
   if (!comments.length) return <p className="rounded-[var(--radius-lg)] border border-dashed border-line-strong py-10 text-center text-muted">No comments here.</p>;
   const all = selected.size === comments.length;
+
+  // Offer only the actions that change something for the current selection.
+  const picked = comments.filter((c) => selected.has(c.id));
+  const count = (st: AdminComment["status"]) => picked.filter((c) => c.status === st).length;
+  const pending = count("pending");
+  const visible = count("visible");
+  const removed = count("hidden") + count("deleted");
+  type Action = "approve" | "show" | "hide" | "delete";
+  const primary: { action: Action; label: string } = pending
+    ? { action: "approve", label: pending === picked.length ? "Approve" : `Approve ${pending}` }
+    : removed && !visible
+      ? { action: "show", label: "Show" }
+      : { action: "hide", label: "Hide" };
+  const secondary: MenuItem[] = [
+    ...(primary.action !== "show" && removed ? [{ label: "Show", onSelect: () => void bulk("show") }] : []),
+    ...(primary.action !== "hide" && visible + pending ? [{ label: "Hide", onSelect: () => void bulk("hide") }] : []),
+    ...(count("deleted") < picked.length ? (["separator", { label: "Delete", destructive: true, onSelect: () => void bulk("delete") }] as MenuItem[]) : []),
+  ].filter((item, i) => !(item === "separator" && i === 0));
+  const summary = [`${selected.size} selected`, pending ? `${pending} pending` : null].filter(Boolean).join(" · ");
   return (
     <div className="pb-20">
       <div className="mb-1 pl-1">
@@ -61,20 +80,11 @@ export function CommentsModeration({ comments }: { comments: AdminComment[] }) {
         ))}
       </ul>
       {selected.size > 0 && (
-        <ActionBar label={error ?? `${selected.size} selected`}>
-          <button type="button" className="btn btn-sm" disabled={busy} onClick={() => bulk("approve")}>
-            Approve
+        <ActionBar label={error ?? summary}>
+          <button type="button" className="btn btn-sm" disabled={busy} onClick={() => bulk(primary.action)}>
+            {primary.label}
           </button>
-          <Menu
-            label="More bulk actions"
-            className="border border-line-strong"
-            items={[
-              { label: "Hide", onSelect: () => bulk("hide") },
-              { label: "Show", onSelect: () => bulk("show") },
-              "separator",
-              { label: "Delete", destructive: true, onSelect: () => bulk("delete") },
-            ]}
-          />
+          {secondary.length > 0 && <Menu label="More bulk actions" className="border border-line-strong" items={secondary} />}
         </ActionBar>
       )}
     </div>
