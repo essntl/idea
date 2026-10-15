@@ -9,3 +9,5 @@ src/generated
 uploads
 *.tsbuildinfo
 next-env.d.ts
+# Personal compose files with real secrets
+docker-compose.*.local.yml
