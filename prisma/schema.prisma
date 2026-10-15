@@ -13,6 +13,15 @@ enum PostStatus {
   scheduled
 }
 
+/// Where a project is in its life, shown publicly as a status pill.
+enum ProjectPhase {
+  planning
+  building
+  live
+  paused
+  archived
+}
+
 enum CommentStatus {
   visible
   pending
@@ -42,12 +51,16 @@ model BlogPost {
   contentText String     @default("")
   tags        Tag[]      @relation("BlogPostTags")
   comments    Comment[]
+  /// Optional: the project this post is a progress update for.
+  projectId   String?
+  project     Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
   status      PostStatus @default(draft)
   publishedAt DateTime?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
   @@index([status, publishedAt])
+  @@index([projectId])
   /// Pending (unpublished) edits to live content: the editor payload, applied by "Publish changes".
   draft          Json?
   draftUpdatedAt DateTime?
@@ -76,9 +89,12 @@ model Article {
   readingTime    Int        @default(1)
   legacyUrl      String?
   comments       Comment[]
+  projectId      String?
+  project        Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([status, publishedAt])
   @@index([categoryId])
+  @@index([projectId])
   /// Pending (unpublished) edits to live content: the editor payload, applied by "Publish changes".
   draft          Json?
   draftUpdatedAt DateTime?
@@ -115,6 +131,7 @@ model Media {
   sourceUrl String?   @unique
   createdAt DateTime  @default(now())
   articles  Article[]
+  projects  Project[]
 }
 
 /// A comment belongs to exactly one article or blog post (enforced by a CHECK constraint in the migration).
@@ -142,6 +159,38 @@ model Comment {
   @@index([blogPostId, createdAt])
   @@index([status])
   @@index([ipHash, createdAt])
+}
+
+/// A project with its links (repository, deployed site, published package) and an optional write-up.
+/// `status` is visibility (draft/published); `phase` is where the project itself stands.
+model Project {
+  id             String       @id @default(cuid())
+  slug           String       @unique
+  title          String
+  summary        String       @default("")
+  contentJson    Json
+  contentHtml    String       @default("")
+  contentText    String       @default("")
+  phase          ProjectPhase @default(building)
+  status         PostStatus   @default(draft)
+  publishedAt    DateTime?
+  repoUrl        String?
+  siteUrl        String?
+  packageUrl     String?
+  /// Technologies, shown as chips.
+  stack          String[]     @default([])
+  featured       Boolean      @default(false)
+  previewImageId String?
+  previewImage   Media?       @relation(fields: [previewImageId], references: [id], onDelete: SetNull)
+  blogPosts      BlogPost[]
+  articles       Article[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  /// Pending (unpublished) edits to live content: the editor payload, applied by "Publish changes".
+  draft          Json?
+  draftUpdatedAt DateTime?
+
+  @@index([status, publishedAt])
 }
 
 model Page {

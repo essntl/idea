@@ -17,10 +17,11 @@ import { Prisma } from "@/generated/prisma/client";
 export const BACKUP_VERSION = 1;
 
 export async function createBackupStream(): Promise<Readable> {
-  const [categories, tags, media, blogPosts, articles, comments, pages, settings, redirects] = await Promise.all([
+  const [categories, tags, media, projects, blogPosts, articles, comments, pages, settings, redirects] = await Promise.all([
     prisma.category.findMany(),
     prisma.tag.findMany(),
     prisma.media.findMany(),
+    prisma.project.findMany(),
     prisma.blogPost.findMany({ include: { tags: { select: { id: true } } } }),
     prisma.article.findMany({ include: { tags: { select: { id: true } } } }),
     prisma.comment.findMany({ orderBy: { createdAt: "asc" } }),
@@ -31,7 +32,7 @@ export async function createBackupStream(): Promise<Readable> {
   const data = {
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
-    categories, tags, media,
+    categories, tags, media, projects,
     blogPosts: blogPosts.map(({ tags: t, ...p }) => ({ ...p, tagIds: t.map((x) => x.id) })),
     articles: articles.map(({ tags: t, ...a }) => ({ ...a, tagIds: t.map((x) => x.id) })),
     comments, pages, settings, redirects,
@@ -69,10 +70,17 @@ const backupSchema = z.object({
     id: z.string(), filename: z.string(), path: z.string(), width: z.number(), height: z.number(), mimeType: z.string(),
     size: z.number(), alt: z.string(), sourceUrl: z.string().nullable(), createdAt: date,
   })),
+  // Added after the first release: older backups simply have no projects.
+  projects: z.array(z.object({
+    id: z.string(), slug: z.string(), title: z.string(), summary: z.string(), contentJson: z.any(), contentHtml: z.string(), contentText: z.string(),
+    phase: z.enum(["planning", "building", "live", "paused", "archived"]), status: z.enum(["draft", "published", "scheduled"]), publishedAt: nDate,
+    repoUrl: z.string().nullable(), siteUrl: z.string().nullable(), packageUrl: z.string().nullable(), stack: z.array(z.string()),
+    featured: z.boolean(), previewImageId: z.string().nullable(), createdAt: date, updatedAt: date, draft: z.any().optional(), draftUpdatedAt: nDate.optional(),
+  })).default([]),
   blogPosts: z.array(z.object({
     id: z.string(), slug: z.string(), title: z.string(), description: z.string(), contentJson: z.any(), contentHtml: z.string(),
     contentText: z.string(), status: z.enum(["draft", "published", "scheduled"]), publishedAt: nDate, createdAt: date, updatedAt: date,
-    draft: z.any().optional(), draftUpdatedAt: nDate.optional(),
+    draft: z.any().optional(), draftUpdatedAt: nDate.optional(), projectId: z.string().nullable().default(null),
     tagIds: z.array(z.string()),
   })),
   articles: z.array(z.object({
@@ -80,12 +88,12 @@ const backupSchema = z.object({
     contentText: z.string(), toc: z.any(), previewImageId: z.string().nullable(), categoryId: z.string().nullable(),
     status: z.enum(["draft", "published", "scheduled"]), publishedAt: nDate, createdAt: date, updatedAt: date,
     seoTitle: z.string().nullable(), seoDescription: z.string().nullable(), readingTime: z.number(), legacyUrl: z.string().nullable(),
-    draft: z.any().optional(), draftUpdatedAt: nDate.optional(),
+    draft: z.any().optional(), draftUpdatedAt: nDate.optional(), projectId: z.string().nullable().default(null),
     tagIds: z.array(z.string()),
   })),
   comments: z.array(z.object({
     id: z.string(), articleId: z.string().nullable(), blogPostId: z.string().nullable().default(null), parentId: z.string().nullable(), authorName: z.string(), authorEmail: z.string().nullable(),
-    body: z.string(), isAdminReply: z.boolean(), status: z.enum(["visible", "pending", "hidden", "deleted"]), ipHash: z.string().nullable(),
+    body: z.string(), bodyHtml: z.string().nullable().default(null), isAdminReply: z.boolean(), status: z.enum(["visible", "pending", "hidden", "deleted"]), ipHash: z.string().nullable(),
     createdAt: date,
   })),
   pages: z.array(z.object({ id: z.string(), key: z.string(), title: z.string(), contentJson: z.any(), contentHtml: z.string(), updatedAt: date, draft: z.any().optional(), draftUpdatedAt: nDate.optional() })),
@@ -93,7 +101,7 @@ const backupSchema = z.object({
   redirects: z.array(z.object({ id: z.string(), fromPath: z.string(), toPath: z.string(), statusCode: z.number(), createdAt: date })),
 });
 
-export type RestoreSummary = { posts: number; articles: number; comments: number; media: number; files: number };
+export type RestoreSummary = { posts: number; articles: number; projects: number; comments: number; media: number; files: number };
 
 /** Restores from a .tar.gz stream. Media files are written as they arrive; the DB is replaced at the end. */
 export async function restoreBackup(input: Readable): Promise<RestoreSummary> {
@@ -135,6 +143,7 @@ export async function restoreBackup(input: Readable): Promise<RestoreSummary> {
       await tx.comment.deleteMany();
       await tx.article.deleteMany();
       await tx.blogPost.deleteMany();
+      await tx.project.deleteMany();
       await tx.tag.deleteMany();
       await tx.category.deleteMany();
       await tx.media.deleteMany();
@@ -145,6 +154,9 @@ export async function restoreBackup(input: Readable): Promise<RestoreSummary> {
       await tx.category.createMany({ data: data.categories });
       await tx.tag.createMany({ data: data.tags });
       await tx.media.createMany({ data: data.media });
+      for (const p of data.projects) {
+        await tx.project.create({ data: { ...p, draft: p.draft ?? Prisma.DbNull, contentJson: p.contentJson ?? {} } });
+      }
       for (const { tagIds, ...p } of data.blogPosts) {
         await tx.blogPost.create({ data: { ...p, draft: p.draft ?? Prisma.DbNull, contentJson: p.contentJson ?? {}, tags: { connect: tagIds.map((id) => ({ id })) } } });
       }
@@ -159,5 +171,5 @@ export async function restoreBackup(input: Readable): Promise<RestoreSummary> {
     },
     { timeout: 120_000 },
   );
-  return { posts: data.blogPosts.length, articles: data.articles.length, comments: data.comments.length, media: data.media.length, files };
+  return { posts: data.blogPosts.length, articles: data.articles.length, projects: data.projects.length, comments: data.comments.length, media: data.media.length, files };
 }

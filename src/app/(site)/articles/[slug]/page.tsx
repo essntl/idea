@@ -13,6 +13,7 @@ import { TableOfContents } from "@/components/site/toc";
 import { ArticleCard } from "@/components/site/article-list";
 import { CommentSection } from "@/components/site/comments/comment-section";
 import { ArrowLeft, ArrowRight } from "@/components/ui/icons";
+import { ProjectNote } from "@/components/site/projects/project-note";
 
 export async function generateMetadata({ params }: PageProps<"/articles/[slug]">): Promise<Metadata> {
   const a = await getArticle((await params).slug);
@@ -91,6 +92,11 @@ export default async function ArticlePage({ params }: PageProps<"/articles/[slug
         </div>
         <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-tight sm:text-[2.5rem]">{article.title}</h1>
         {article.excerpt && <p className="mt-4 text-lg text-muted">{article.excerpt}</p>}
+        {article.project && (
+          <div className="mt-5">
+            <ProjectNote project={article.project} />
+          </div>
+        )}
       </header>
 
       {article.previewImage && (

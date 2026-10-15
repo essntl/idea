@@ -16,6 +16,8 @@ export const settingsSchema = z.object({
   captchaProvider: z.enum(["turnstile", "recaptcha"]).nullable(),
   commentsRequireApproval: z.boolean(),
   commentsEnabled: z.boolean(),
+  /** GitHub profile, contribution graph and streaks on /projects (account taken from githubUrl). */
+  showGithubActivity: z.boolean(),
   postsPerPage: z.number().int().min(3).max(100),
 });
 
@@ -32,6 +34,7 @@ export const DEFAULT_SETTINGS: Settings = {
   captchaProvider: null,
   commentsRequireApproval: false,
   commentsEnabled: true,
+  showGithubActivity: true,
   postsPerPage: 10,
 };
 

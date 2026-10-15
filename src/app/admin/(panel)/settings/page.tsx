@@ -14,6 +14,7 @@ export default async function SettingsPage() {
       <SettingsForm
         initial={settings}
         envCaptcha={e.CAPTCHA_PROVIDER}
+        githubToken={!!process.env.GITHUB_TOKEN?.trim()}
         captchaKeys={{ turnstile: !!(e.TURNSTILE_SITE_KEY && e.TURNSTILE_SECRET_KEY), recaptcha: !!(e.RECAPTCHA_SITE_KEY && e.RECAPTCHA_SECRET_KEY) }}
       />
     </div>

@@ -34,6 +34,15 @@ export default async function PreviewPage({ params }: PageProps<"/admin/preview/
       tags: a.tags.map((t) => t.name), publishedAt: a.publishedAt?.toISOString() ?? null, categoryId: a.categoryId,
       previewImage: a.previewImage ? { url: `/media/${a.previewImage.path}`, width: a.previewImage.width, height: a.previewImage.height, alt: a.previewImage.alt } : null,
     };
+  } else if (type === "project") {
+    const p = await prisma.project.findUnique({ where: { id }, include: { previewImage: true } });
+    if (!p) notFound();
+    data = {
+      kind: "project", id, title: p.title, description: p.summary, html: p.contentHtml, toc: [], readingTime: 1, tags: [],
+      publishedAt: p.publishedAt?.toISOString() ?? null, categoryId: null,
+      previewImage: p.previewImage ? { url: `/media/${p.previewImage.path}`, width: p.previewImage.width, height: p.previewImage.height, alt: p.previewImage.alt } : null,
+      project: { phase: p.phase, repoUrl: p.repoUrl ?? "", siteUrl: p.siteUrl ?? "", packageUrl: p.packageUrl ?? "", stack: p.stack },
+    };
   } else if (type === "page" && id === "about") {
     const p = await prisma.page.findUnique({ where: { key: "about" } });
     data = {

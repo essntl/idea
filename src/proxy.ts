@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/db";
 
-/** Routes that exist at the root; anything else with a single segment may be a legacy Ghost URL. */
-const APP_PREFIXES = ["/admin", "/api", "/blog", "/articles", "/about", "/search", "/media", "/_next"];
+/** Paths that never redirect. Everything else is checked against stored redirects (legacy Ghost URLs, renamed slugs). */
+const NO_REDIRECT_PREFIXES = ["/admin", "/api", "/media", "/_next"];
 
 let redirectCache: { at: number; map: Map<string, { to: string; status: number }> } | null = null;
 const REDIRECT_TTL_MS = 60_000;
@@ -42,8 +42,8 @@ function csp(nonce: string, isDev: boolean, https: boolean) {
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Legacy URLs (e.g. /how-does-a-pc-work/) and stored redirects → one permanent hop.
-  if (!APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) && pathname !== "/") {
+  // Legacy URLs (e.g. /how-does-a-pc-work/) and stored redirects (e.g. a renamed article slug) → one permanent hop.
+  if (!NO_REDIRECT_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) && pathname !== "/") {
     const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
     const map = await redirectMap();
     const hit = map.get(normalized) ?? map.get(`${normalized}/`);

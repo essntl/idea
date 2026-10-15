@@ -4,7 +4,17 @@ import { useId, useState } from "react";
 import { CloseIcon } from "@/components/ui/icons";
 
 /** Multi-select for tags: pick existing ones (datalist) or type a new name and press Enter. */
-export function TagsInput({ value, onChange, suggestions }: { value: string[]; onChange: (v: string[]) => void; suggestions: string[] }) {
+export function TagsInput({
+  value,
+  onChange,
+  suggestions,
+  placeholder = "Add a tag and press Enter",
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+  suggestions: string[];
+  placeholder?: string;
+}) {
   const id = useId();
   const [draft, setDraft] = useState("");
 
@@ -36,7 +46,7 @@ export function TagsInput({ value, onChange, suggestions }: { value: string[]; o
         className="field"
         list={`${id}-list`}
         value={draft}
-        placeholder="Add a tag and press Enter"
+        placeholder={placeholder}
         aria-label="Add tag"
         onChange={(e) => {
           const v = e.target.value;

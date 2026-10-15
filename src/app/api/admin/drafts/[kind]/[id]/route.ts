@@ -5,7 +5,7 @@ import { discardPendingDraft, savePendingDraft } from "@/lib/admin/content";
 
 type Ctx = RouteContext<"/api/admin/drafts/[kind]/[id]">;
 
-const kindSchema = z.enum(["blog", "article", "page"]);
+const kindSchema = z.enum(["blog", "article", "project", "page"]);
 
 /** Autosave pending (unpublished) changes to live content. The published version is untouched. */
 export const PUT = adminRoute<Ctx>(async (req, { params }) => {

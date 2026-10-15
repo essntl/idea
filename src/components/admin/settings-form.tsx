@@ -40,6 +40,8 @@ function Field({ label, help, children, htmlFor }: { label: string; help?: strin
   );
 }
 
+const githubUser = (url: string) => url.match(/^https?:\/\/(?:www\.)?github\.com\/([A-Za-z0-9-]+)/i)?.[1] ?? null;
+
 const Status = ({ msg }: { msg: { ok: boolean; text: string } | null }) =>
   msg ? (
     <p role={msg.ok ? "status" : "alert"} className={`text-sm ${msg.ok ? "text-muted" : "font-medium"}`}>
@@ -47,7 +49,17 @@ const Status = ({ msg }: { msg: { ok: boolean; text: string } | null }) =>
     </p>
   ) : null;
 
-export function SettingsForm({ initial, envCaptcha, captchaKeys }: { initial: Settings; envCaptcha: "turnstile" | "recaptcha"; captchaKeys: { turnstile: boolean; recaptcha: boolean } }) {
+export function SettingsForm({
+  initial,
+  envCaptcha,
+  captchaKeys,
+  githubToken,
+}: {
+  initial: Settings;
+  envCaptcha: "turnstile" | "recaptcha";
+  captchaKeys: { turnstile: boolean; recaptcha: boolean };
+  githubToken: boolean;
+}) {
   const [saved, setSaved] = useState(initial);
   const [s, setS] = useState(initial);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -122,6 +134,24 @@ export function SettingsForm({ initial, envCaptcha, captchaKeys }: { initial: Se
               </button>
             </div>
           </Field>
+        </Card>
+
+        <Card title="Projects" description="The Projects page lists your projects and, optionally, your GitHub activity.">
+          <Switch
+            label="Show GitHub activity"
+            description={
+              githubUser(s.githubUrl)
+                ? `Profile, contribution graph and streaks for @${githubUser(s.githubUrl)} (from the GitHub link above).`
+                : "Add your GitHub profile link above to enable this."
+            }
+            checked={s.showGithubActivity}
+            onChange={(v) => set("showGithubActivity", v)}
+          />
+          <p className="text-sm text-muted">
+            {githubToken
+              ? "Using GITHUB_TOKEN: data refreshes every 30 minutes."
+              : "No GITHUB_TOKEN set: public GitHub limits apply (60 requests an hour). Data is cached for 30 minutes, which is plenty for a personal site."}
+          </p>
         </Card>
 
         <Card title="Comments" description="Visitors can comment on articles and blog posts without an account.">
@@ -243,12 +273,12 @@ function BackupCard() {
             setBusy(true);
             setMsg({ ok: true, text: "Restoring…" });
             try {
-              const r = await api<{ summary: { posts: number; articles: number; comments: number; media: number } }>("/api/admin/backup", {
+              const r = await api<{ summary: { posts: number; articles: number; projects: number; comments: number; media: number } }>("/api/admin/backup", {
                 body: file,
                 headers: { "content-type": "application/gzip" },
               });
               const sum = r.summary;
-              setMsg({ ok: true, text: `Restored ${sum.articles} articles, ${sum.posts} posts, ${sum.comments} comments, ${sum.media} images.` });
+              setMsg({ ok: true, text: `Restored ${sum.articles} articles, ${sum.posts} posts, ${sum.projects} projects, ${sum.comments} comments, ${sum.media} images.` });
             } catch (err) {
               setMsg({ ok: false, text: (err as Error).message });
             } finally {

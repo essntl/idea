@@ -17,12 +17,15 @@ import { publishPreviewDraft, type PreviewDraft } from "@/lib/admin/preview-draf
 import { ArrowLeft, EyeIcon, SlidersIcon } from "@/components/ui/icons";
 import { Menu, type MenuItem } from "@/components/ui/menu";
 import { Sheet } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
+import { PHASE_META, PHASE_ORDER, type ProjectPhase } from "@/lib/projects";
 
-export type EditorKind = "blog" | "article" | "page";
+export type EditorKind = "blog" | "article" | "project" | "page";
 
 export type EditorInitial = {
   id: string;
   title: string;
+  /** Blog description, article excerpt or project summary. */
   description: string;
   contentJson: JSONContent;
   tags: string[];
@@ -30,9 +33,18 @@ export type EditorInitial = {
   publishedAt: string | null;
   slug: string;
   categoryId: string | null;
+  /** Article preview image or project cover. */
   previewImage: MediaItem | null;
   seoTitle: string;
   seoDescription: string;
+  /** Blog posts and articles: the project they're a progress update for. */
+  projectId: string | null;
+  phase: ProjectPhase;
+  repoUrl: string;
+  siteUrl: string;
+  packageUrl: string;
+  stack: string[];
+  featured: boolean;
   publicUrl: string | null;
   /** When the live post has autosaved, unpublished changes: when they were last saved. */
   pendingDraftAt: string | null;
@@ -43,9 +55,15 @@ type Props = {
   initial: EditorInitial;
   tagSuggestions?: string[];
   categories?: { id: string; name: string }[];
+  /** Projects a blog post or article can belong to. */
+  projects?: { id: string; title: string }[];
 };
 
 type State = Omit<EditorInitial, "id" | "publicUrl" | "pendingDraftAt">;
+
+const NOUN: Record<EditorKind, string> = { blog: "post", article: "article", project: "project", page: "page" };
+const API_BASE: Record<Exclude<EditorKind, "page">, string> = { blog: "/api/admin/blog", article: "/api/admin/articles", project: "/api/admin/projects" };
+const PUBLIC_BASE: Record<Exclude<EditorKind, "page">, string> = { blog: "/blog", article: "/articles", project: "/projects" };
 
 /** ISO → value for <input type="datetime-local"> in the browser's timezone. */
 function toLocalInput(iso: string | null) {
@@ -55,16 +73,18 @@ function toLocalInput(iso: string | null) {
 }
 const fromLocalInput = (v: string) => (v ? new Date(v).toISOString() : null);
 
-const LIST_URL: Record<EditorKind, string> = { blog: "/admin/blog", article: "/admin/articles", page: "/admin" };
+const LIST_URL: Record<EditorKind, string> = { blog: "/admin/blog", article: "/admin/articles", project: "/admin/projects", page: "/admin" };
 
-export function PostEditor({ kind, initial, tagSuggestions = [], categories: initialCategories = [] }: Props) {
+export function PostEditor({ kind, initial, tagSuggestions = [], categories: initialCategories = [], projects = [] }: Props) {
   const router = useRouter();
   const { id } = initial;
-  const [state, setState] = useState<State>(() => ({
-    title: initial.title, description: initial.description, contentJson: initial.contentJson, tags: initial.tags,
-    status: initial.status, publishedAt: initial.publishedAt, slug: initial.slug, categoryId: initial.categoryId,
-    previewImage: initial.previewImage, seoTitle: initial.seoTitle, seoDescription: initial.seoDescription,
-  }));
+  const [state, setState] = useState<State>(() => {
+    const { id: _id, publicUrl: _url, pendingDraftAt: _at, ...fields } = initial;
+    void [_id, _url, _at];
+    return fields;
+  });
+  // Articles and projects have an editable URL slug.
+  const hasSlug = kind === "article" || kind === "project";
   const [savedStatus, setSavedStatus] = useState(initial.status);
   const [pendingAt, setPendingAt] = useState<string | null>(initial.pendingDraftAt);
   const [publicUrl, setPublicUrl] = useState(initial.publicUrl);
@@ -96,23 +116,23 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
     setDirty(true);
   }, []);
 
-  // Auto-generate the article slug from the title until it's edited by hand or published.
+  // Auto-generate the slug from the title until it's edited by hand or published.
   useEffect(() => {
-    if (kind !== "article" || slugTouched) return;
+    if (!hasSlug || slugTouched) return;
     const next = slugify(state.title);
     if (next && next !== state.slug) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- derived field that stays editable
       setState((s) => ({ ...s, slug: next }));
     }
-  }, [kind, slugTouched, state.title, state.slug]);
+  }, [hasSlug, slugTouched, state.title, state.slug]);
 
   // Live slug validation.
   useEffect(() => {
-    if (kind !== "article") return;
+    if (kind !== "article" && kind !== "project") return;
     const slug = state.slug;
     const t = setTimeout(async () => {
       try {
-        const r = await api<{ available: boolean; error?: string; suggestion?: string }>(`/api/admin/articles/slug?slug=${encodeURIComponent(slug)}&excludeId=${id}`);
+        const r = await api<{ available: boolean; error?: string; suggestion?: string }>(`${API_BASE[kind]}/slug?slug=${encodeURIComponent(slug)}&excludeId=${id}`);
         setSlugCheck({ ok: r.available, error: r.error, suggestion: r.suggestion });
       } catch {
         setSlugCheck(null);
@@ -124,10 +144,19 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
   const payload = useCallback(
     (s: State, status = s.status) => {
       if (kind === "page") return { title: s.title, contentJson: s.contentJson };
-      if (kind === "blog") return { title: s.title, description: s.description, contentJson: s.contentJson, tags: s.tags, status, publishedAt: s.publishedAt };
+      if (kind === "blog") {
+        return { title: s.title, description: s.description, contentJson: s.contentJson, tags: s.tags, status, publishedAt: s.publishedAt, projectId: s.projectId };
+      }
+      if (kind === "project") {
+        return {
+          title: s.title, slug: s.slug, summary: s.description, contentJson: s.contentJson, status, publishedAt: s.publishedAt, phase: s.phase,
+          repoUrl: s.repoUrl, siteUrl: s.siteUrl, packageUrl: s.packageUrl, stack: s.stack, featured: s.featured, previewImageId: s.previewImage?.id ?? null,
+        };
+      }
       return {
         title: s.title, slug: s.slug, excerpt: s.description, contentJson: s.contentJson, tags: s.tags, status, publishedAt: s.publishedAt,
         categoryId: s.categoryId, previewImageId: s.previewImage?.id ?? null, seoTitle: s.seoTitle || null, seoDescription: s.seoDescription || null,
+        projectId: s.projectId,
       };
     },
     [kind],
@@ -171,7 +200,7 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
       setSaving(true);
       if (!opts.auto) setMessage(null);
       try {
-        const url = kind === "page" ? `/api/admin/pages/about` : `/api/admin/${kind === "blog" ? "blog" : "articles"}/${id}`;
+        const url = kind === "page" ? `/api/admin/pages/about` : `${API_BASE[kind]}/${id}`;
         const res = await api<{ slug?: string; status?: State["status"]; publishedAt?: string | null }>(url, { method: "PUT", json: payload(s, status) });
         savedVersion.current = v;
         if (version.current === v) setDirty(false);
@@ -180,7 +209,7 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
         if (res.status) {
           setSavedStatus(res.status);
           setState((cur) => ({ ...cur, status: res.status!, publishedAt: res.publishedAt ?? null, slug: res.slug ?? cur.slug }));
-          if (kind !== "page" && res.slug) setPublicUrl(`/${kind === "blog" ? "blog" : "articles"}/${res.slug}`);
+          if (kind !== "page" && res.slug) setPublicUrl(`${PUBLIC_BASE[kind]}/${res.slug}`);
         }
         if (!opts.auto) {
           const text = kind === "page" ? "Published" : status === "draft" ? (isLive ? "Unpublished — now a draft" : "Draft saved") : status === "scheduled" ? "Scheduled" : isLive ? "Changes published" : "Published";
@@ -267,6 +296,7 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
       publishedAt: s.publishedAt,
       categoryId: s.categoryId,
       previewImage: s.previewImage ? { url: s.previewImage.url, width: s.previewImage.width, height: s.previewImage.height, alt: s.previewImage.alt } : null,
+      project: { phase: s.phase, repoUrl: s.repoUrl, siteUrl: s.siteUrl, packageUrl: s.packageUrl, stack: s.stack },
       at: Date.now(),
     }),
     [],
@@ -325,9 +355,10 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
   }
 
   async function remove() {
-    if (!confirm(`Delete this ${kind === "blog" ? "post" : "article"} permanently?`)) return;
+    if (kind === "page") return;
+    if (!confirm(`Delete this ${NOUN[kind]} permanently?`)) return;
     try {
-      await api(`/api/admin/${kind === "blog" ? "blog" : "articles"}/${id}`, { method: "DELETE" });
+      await api(`${API_BASE[kind]}/${id}`, { method: "DELETE" });
       setDirty(false);
       router.push(LIST_URL[kind]);
       router.refresh();
@@ -390,6 +421,30 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
         : `Draft${lastSaved ? ` · saved ${time(lastSaved)}` : ""}`;
 
   const label = "mb-1 block text-sm font-medium";
+  const imageField = (
+    <div>
+      <span className={label}>{kind === "project" ? "Cover image" : "Preview image"}</span>
+      {state.previewImage ? (
+        <div>
+          <div className="relative aspect-[16/9] overflow-hidden rounded-[var(--radius-lg)] bg-surface">
+            {/* eslint-disable-next-line @next/next/no-img-element -- admin preview */}
+            <img src={`${state.previewImage.url}?w=640`} alt={state.previewImage.alt} className="size-full object-cover" />
+          </div>
+          <p className="mt-1 text-xs text-muted">Shown cropped to 16:9 in {kind === "project" ? "project cards" : "article lists"}.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" className="btn btn-ghost" onClick={() => setCropping(true)}>Crop</button>
+            <button type="button" className="btn btn-ghost" onClick={() => setPickerOpen(true)}>Change</button>
+            <button type="button" className="btn btn-ghost" onClick={() => update("previewImage", null)}>Remove</button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn btn-ghost" onClick={uploadPreview}>Upload</button>
+          <button type="button" className="btn btn-ghost" onClick={() => setPickerOpen(true)}>Media library</button>
+        </div>
+      )}
+    </div>
+  );
   const sidebar = (
     <div className="space-y-6">
       {kind !== "page" && (
@@ -408,24 +463,65 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
               ]}
             />
           </div>
-          <div>
-            <label htmlFor="publishedAt" className={label}>{state.status === "scheduled" ? "Publish at" : "Publish date"}</label>
-            <input id="publishedAt" type="datetime-local" className="field" value={toLocalInput(state.publishedAt)} onChange={(e) => update("publishedAt", fromLocalInput(e.target.value))} />
-            <p className="mt-1 text-xs text-muted">{state.status === "scheduled" ? "Goes live automatically at this time." : "Leave empty to use the time of publishing. Can be backdated."}</p>
-          </div>
+          {kind === "project" ? (
+            <div>
+              <label htmlFor="phase" className={label}>Project status</label>
+              <Select
+                id="phase"
+                className="field"
+                value={state.phase}
+                onChange={(v) => update("phase", v as ProjectPhase)}
+                options={PHASE_ORDER.map((p) => ({ value: p, label: PHASE_META[p].label, hint: PHASE_META[p].hint }))}
+              />
+            </div>
+          ) : (
+            <div>
+              <label htmlFor="publishedAt" className={label}>{state.status === "scheduled" ? "Publish at" : "Publish date"}</label>
+              <input id="publishedAt" type="datetime-local" className="field" value={toLocalInput(state.publishedAt)} onChange={(e) => update("publishedAt", fromLocalInput(e.target.value))} />
+              <p className="mt-1 text-xs text-muted">{state.status === "scheduled" ? "Goes live automatically at this time." : "Leave empty to use the time of publishing. Can be backdated."}</p>
+            </div>
+          )}
         </>
       )}
       {kind !== "page" && (
         <div>
-          <label htmlFor="description" className={label}>{kind === "blog" ? "Description" : "Excerpt"}</label>
-          <textarea id="description" className="field min-h-24" maxLength={kind === "blog" ? 500 : 1000} value={state.description} onChange={(e) => update("description", e.target.value)} />
+          <label htmlFor="description" className={label}>{kind === "blog" ? "Description" : kind === "project" ? "Summary" : "Excerpt"}</label>
+          <textarea id="description" className="field min-h-24" maxLength={kind === "article" ? 1000 : 500} value={state.description} onChange={(e) => update("description", e.target.value)} />
+          {kind === "project" && <p className="mt-1 text-xs text-muted">One or two sentences, shown on project cards.</p>}
         </div>
       )}
-      {kind === "article" && (
+      {kind === "project" && (
+        <fieldset className="space-y-3">
+          <legend className={label}>Links</legend>
+          {(
+            [
+              ["repoUrl", "Repository", "https://github.com/you/project"],
+              ["siteUrl", "Website", "https://project.example"],
+              ["packageUrl", "Package", "npm, GHCR, PyPI, app store…"],
+            ] as const
+          ).map(([key, name, placeholder]) => (
+            <div key={key}>
+              <label htmlFor={key} className="mb-1 block text-xs text-muted">{name}</label>
+              <input id={key} type="url" inputMode="url" className="field" placeholder={placeholder} value={state[key]} maxLength={500} onChange={(e) => update(key, e.target.value)} />
+            </div>
+          ))}
+          <p className="text-xs text-muted">GitHub repositories also show stars, latest release and recent commits.</p>
+        </fieldset>
+      )}
+      {kind === "project" && (
+        <>
+          <div>
+            <span className={label}>Stack</span>
+            <TagsInput value={state.stack} onChange={(v) => update("stack", v)} suggestions={tagSuggestions} placeholder="Add a technology and press Enter" />
+          </div>
+          <Switch label="Featured" description="Shown first, and on the home page." checked={state.featured} onChange={(v) => update("featured", v)} />
+        </>
+      )}
+      {hasSlug && (
         <div>
           <label htmlFor="slug" className={label}>Slug</label>
           <div className="flex items-center">
-            <span className="mr-1 text-sm text-muted">/articles/</span>
+            <span className="mr-1 text-sm text-muted">{kind === "project" ? "/projects/" : "/articles/"}</span>
             <input
               id="slug"
               className="field"
@@ -457,12 +553,26 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
           </p>
         </div>
       )}
-      {kind !== "page" && (
+      {(kind === "blog" || kind === "article") && (
         <div>
           <span className={label}>Tags</span>
           <TagsInput value={state.tags} onChange={(v) => update("tags", v)} suggestions={tagSuggestions} />
         </div>
       )}
+      {(kind === "blog" || kind === "article") && projects.length > 0 && (
+        <div>
+          <label htmlFor="project" className={label}>Project</label>
+          <Select
+            id="project"
+            className="field"
+            value={state.projectId ?? ""}
+            onChange={(v) => update("projectId", v || null)}
+            options={[{ value: "", label: "None" }, ...projects.map((p) => ({ value: p.id, label: p.title || "Untitled project" }))]}
+          />
+          <p className="mt-1 text-xs text-muted">Listed as a progress update on the project page.</p>
+        </div>
+      )}
+      {kind === "project" && imageField}
       {kind === "article" && (
         <>
           <div>
@@ -478,28 +588,7 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
               <button type="button" className="btn btn-ghost" onClick={newCategory} aria-label="New category">New</button>
             </div>
           </div>
-          <div>
-            <span className={label}>Preview image</span>
-            {state.previewImage ? (
-              <div>
-                <div className="relative aspect-[16/9] overflow-hidden rounded-[var(--radius-lg)] bg-surface">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- admin preview */}
-                  <img src={`${state.previewImage.url}?w=640`} alt={state.previewImage.alt} className="size-full object-cover" />
-                </div>
-                <p className="mt-1 text-xs text-muted">Shown cropped to 16:9 in article lists.</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button type="button" className="btn btn-ghost" onClick={() => setCropping(true)}>Crop</button>
-                  <button type="button" className="btn btn-ghost" onClick={() => setPickerOpen(true)}>Change</button>
-                  <button type="button" className="btn btn-ghost" onClick={() => update("previewImage", null)}>Remove</button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                <button type="button" className="btn btn-ghost" onClick={uploadPreview}>Upload</button>
-                <button type="button" className="btn btn-ghost" onClick={() => setPickerOpen(true)}>Media library</button>
-              </div>
-            )}
-          </div>
+          {imageField}
           <details className="border-t border-line pt-4">
             <summary className="cursor-pointer text-sm font-medium">SEO</summary>
             <div className="mt-3 space-y-4">
@@ -525,15 +614,14 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
     ...(publicUrl && isLive ? [{ label: "View on site", href: publicUrl, newTab: true } as MenuItem] : []),
     { label: "Undo", onSelect: () => editorRef.current?.chain().focus().undo().run() },
     { label: "Redo", onSelect: () => editorRef.current?.chain().focus().redo().run() },
-    ...(kind !== "page"
+    ...(kind === "blog" || kind === "article"
       ? ([
           "separator",
           { label: "Import markdown…", onSelect: importMarkdown },
           { label: "Export as markdown", href: `/api/admin/export/markdown?type=${kind}&id=${id}` },
-          "separator",
-          { label: `Delete ${kind === "blog" ? "post" : "article"}`, destructive: true, onSelect: remove },
         ] as MenuItem[])
       : []),
+    ...(kind !== "page" ? (["separator", { label: `Delete ${NOUN[kind]}`, destructive: true, onSelect: remove }] as MenuItem[]) : []),
   ];
 
   return (
@@ -556,8 +644,8 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
               type="button"
               onClick={() => setSheetOpen(true)}
               aria-expanded={sheetOpen}
-              title="Post settings"
-              aria-label="Post settings"
+              title="Settings"
+              aria-label="Settings"
               className="flex size-10 items-center justify-center rounded-[var(--radius-md)] text-muted hover:bg-surface-2 hover:text-fg lg:hidden"
             >
               <SlidersIcon width={19} height={19} />
@@ -568,7 +656,7 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
             type="button"
             className="btn btn-sm ml-1.5 min-h-10 px-4"
             onClick={() => void save()}
-            disabled={saving || primary.disabled || (kind === "article" && slugCheck?.ok === false)}
+            disabled={saving || primary.disabled || (hasSlug && slugCheck?.ok === false)}
           >
             {primary.label}
           </button>
@@ -611,7 +699,7 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
             <aside className="hidden lg:block" aria-label="Post settings">
               <div className="sticky top-6 max-h-[calc(100dvh-3rem)] overflow-y-auto pb-6">{sidebar}</div>
             </aside>
-            <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={kind === "blog" ? "Post settings" : "Article settings"}>
+            <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={kind === "blog" ? "Post settings" : kind === "project" ? "Project settings" : "Article settings"}>
               <div className="pt-1">{sidebar}</div>
             </Sheet>
           </>
@@ -620,7 +708,7 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
 
       <MediaPicker
         open={pickerOpen}
-        title="Choose a preview image"
+        title={kind === "project" ? "Choose a cover image" : "Choose a preview image"}
         onClose={() => setPickerOpen(false)}
         onSelect={(m) => {
           setPickerOpen(false);

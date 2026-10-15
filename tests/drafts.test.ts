@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { applyDraft, type DraftFields } from "@/lib/admin/apply-draft";
+import { applyDraft, NO_EXTRA_FIELDS, type DraftFields } from "@/lib/admin/apply-draft";
 import { draftSchemas } from "@/lib/admin/content";
 
 const live: DraftFields = {
+  ...NO_EXTRA_FIELDS,
   title: "Live title",
   description: "Live excerpt",
   contentJson: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "live" }] }] },
@@ -47,6 +48,24 @@ describe("pending drafts", () => {
       publishedAt: null,
     });
     expect(parsed.slug).toBe("Not A Valid Slug Yet");
+  });
+
+  it("overlays project fields and maps a project summary to the description", () => {
+    const project: DraftFields = { ...live, phase: "building", repoUrl: "https://github.com/a/b", stack: ["Go"], featured: false };
+    const r = applyDraft(project, { summary: "New summary", phase: "live", siteUrl: "https://b.example", stack: ["Go", "Postgres"], featured: true });
+    expect(r.description).toBe("New summary");
+    expect(r.phase).toBe("live");
+    expect(r.siteUrl).toBe("https://b.example");
+    expect(r.repoUrl).toBe("https://github.com/a/b");
+    expect(r.stack).toEqual(["Go", "Postgres"]);
+    expect(r.featured).toBe(true);
+  });
+
+  it("autosaves half-typed project links (they're checked on publish)", () => {
+    const parsed = draftSchemas.project.parse({
+      title: "", slug: "x", summary: "", contentJson: { type: "doc", content: [] }, phase: "planning", repoUrl: "github.com/ess", siteUrl: "", packageUrl: "",
+    });
+    expect(parsed.repoUrl).toBe("github.com/ess");
   });
 
   it("never stores a status in a draft (publishing is explicit)", () => {

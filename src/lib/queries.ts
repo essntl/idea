@@ -7,6 +7,7 @@ import { prisma } from "./db";
 import { TAGS } from "./cache-tags";
 import type { Prisma } from "@/generated/prisma/client";
 import type { TocItem } from "./content/pipeline";
+import { PHASE_ORDER, type ProjectPhase } from "./projects";
 
 const SCHEDULE_GRANULARITY_SEC = 60;
 
@@ -47,17 +48,17 @@ export const listBlogPosts = cached(
   "blog-list",
 );
 
-export type BlogPostDTO = BlogListItem & { contentHtml: string; updatedAt: string };
+export type BlogPostDTO = BlogListItem & { contentHtml: string; updatedAt: string; project: ProjectLink | null };
 
 export const getBlogPost = cached(async (slug: string): Promise<BlogPostDTO | null> => {
   const r = await prisma.blogPost.findFirst({
     where: { slug, ...visibleWhere() },
-    include: { tags: { select: { name: true, slug: true }, orderBy: { name: "asc" } } },
+    include: { tags: { select: { name: true, slug: true }, orderBy: { name: "asc" } }, project: projectLinkSelect },
   });
   if (!r) return null;
   return {
     id: r.id, slug: r.slug, title: r.title, description: r.description, contentHtml: r.contentHtml,
-    publishedAt: r.publishedAt!.toISOString(), updatedAt: r.updatedAt.toISOString(), tags: r.tags,
+    publishedAt: r.publishedAt!.toISOString(), updatedAt: r.updatedAt.toISOString(), tags: r.tags, project: visibleProject(r.project),
   };
 }, "blog-post");
 
@@ -101,7 +102,7 @@ export const listArticles = cached(
 
 export type ArticleDTO = ArticleListItem & {
   contentHtml: string; toc: TocItem[]; updatedAt: string; tags: TagDTO[];
-  seoTitle: string | null; seoDescription: string | null; categoryId: string | null;
+  seoTitle: string | null; seoDescription: string | null; categoryId: string | null; project: ProjectLink | null;
 };
 
 export const getArticle = cached(async (slug: string): Promise<ArticleDTO | null> => {
@@ -109,13 +110,13 @@ export const getArticle = cached(async (slug: string): Promise<ArticleDTO | null
     where: { slug, ...visibleWhere() },
     select: {
       ...articleListSelect, contentHtml: true, toc: true, updatedAt: true, seoTitle: true, seoDescription: true, categoryId: true,
-      tags: { select: { name: true, slug: true }, orderBy: { name: "asc" } },
+      tags: { select: { name: true, slug: true }, orderBy: { name: "asc" } }, project: projectLinkSelect,
     },
   });
   if (!r) return null;
   return {
     ...articleListItem(r), contentHtml: r.contentHtml, toc: (r.toc as TocItem[]) ?? [], updatedAt: r.updatedAt.toISOString(),
-    tags: r.tags, seoTitle: r.seoTitle, seoDescription: r.seoDescription, categoryId: r.categoryId,
+    tags: r.tags, seoTitle: r.seoTitle, seoDescription: r.seoDescription, categoryId: r.categoryId, project: visibleProject(r.project),
   };
 }, "article");
 
@@ -148,6 +149,70 @@ export const getRelatedArticles = cached(async (categoryId: string | null, exclu
   });
   return rows.map(articleListItem);
 }, "article-related");
+
+/* -------------------------------- Projects ------------------------------- */
+
+export type ProjectLink = { slug: string; title: string };
+
+export type ProjectListItem = {
+  id: string; slug: string; title: string; summary: string; phase: ProjectPhase; featured: boolean; stack: string[];
+  repoUrl: string | null; siteUrl: string | null; packageUrl: string | null; previewImage: MediaDTO | null; updatedAt: string; updates: number;
+};
+
+const projectListSelect = {
+  id: true, slug: true, title: true, summary: true, phase: true, featured: true, stack: true, repoUrl: true, siteUrl: true, packageUrl: true, updatedAt: true,
+  previewImage: { select: { id: true, path: true, width: true, height: true, alt: true } },
+} satisfies Prisma.ProjectSelect;
+
+/** Featured first, then by phase (building, live, …), then most recently updated. */
+function sortProjects<T extends { featured: boolean; phase: ProjectPhase; updatedAt: string }>(items: T[]): T[] {
+  return [...items].sort(
+    (a, b) => Number(b.featured) - Number(a.featured) || PHASE_ORDER.indexOf(a.phase) - PHASE_ORDER.indexOf(b.phase) || b.updatedAt.localeCompare(a.updatedAt),
+  );
+}
+
+export const listProjects = cached(async (): Promise<ProjectListItem[]> => {
+  const vis = visibleWhere();
+  const rows = await prisma.project.findMany({
+    where: vis,
+    select: { ...projectListSelect, _count: { select: { blogPosts: { where: vis }, articles: { where: vis } } } },
+  });
+  return sortProjects(
+    rows.map(({ _count, ...r }) => ({ ...r, previewImage: mediaDto(r.previewImage), updatedAt: r.updatedAt.toISOString(), updates: _count.blogPosts + _count.articles })),
+  );
+}, "project-list");
+
+export type ProjectDTO = Omit<ProjectListItem, "updates"> & { contentHtml: string; publishedAt: string; createdAt: string };
+
+export const getProject = cached(async (slug: string): Promise<ProjectDTO | null> => {
+  const r = await prisma.project.findFirst({ where: { slug, ...visibleWhere() }, select: { ...projectListSelect, contentHtml: true, publishedAt: true, createdAt: true } });
+  if (!r) return null;
+  return {
+    ...r, previewImage: mediaDto(r.previewImage), updatedAt: r.updatedAt.toISOString(), publishedAt: r.publishedAt!.toISOString(), createdAt: r.createdAt.toISOString(),
+  };
+}, "project");
+
+export type ProjectUpdate = { kind: "blog" | "article"; title: string; url: string; description: string; publishedAt: string };
+
+/** Blog posts and articles linked to a project, newest first. */
+export const getProjectUpdates = cached(async (projectId: string): Promise<ProjectUpdate[]> => {
+  const where = { projectId, ...visibleWhere() };
+  const [posts, articles] = await Promise.all([
+    prisma.blogPost.findMany({ where, orderBy: { publishedAt: "desc" }, take: 30, select: { slug: true, title: true, description: true, publishedAt: true } }),
+    prisma.article.findMany({ where, orderBy: { publishedAt: "desc" }, take: 30, select: { slug: true, title: true, excerpt: true, publishedAt: true } }),
+  ]);
+  return [
+    ...posts.map((p) => ({ kind: "blog" as const, title: p.title, url: `/blog/${p.slug}`, description: p.description, publishedAt: p.publishedAt!.toISOString() })),
+    ...articles.map((a) => ({ kind: "article" as const, title: a.title, url: `/articles/${a.slug}`, description: a.excerpt, publishedAt: a.publishedAt!.toISOString() })),
+  ].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+}, "project-updates");
+
+/** The project a post belongs to, only when that project is public. */
+function visibleProject(p: { slug: string; title: string; status: string; publishedAt: Date | null } | null): ProjectLink | null {
+  return p && p.status !== "draft" && p.publishedAt && p.publishedAt <= new Date() ? { slug: p.slug, title: p.title } : null;
+}
+
+const projectLinkSelect = { select: { slug: true, title: true, status: true, publishedAt: true } } as const;
 
 /* ------------------------------- Taxonomy -------------------------------- */
 
@@ -223,14 +288,15 @@ export const getPage = cached(async (key: string) => {
 /* ------------------------------- Feeds/SEO ------------------------------- */
 
 export const getSitemapEntries = cached(async () => {
-  const [articles, posts, categories, tags] = await Promise.all([
+  const [articles, posts, projects, categories, tags] = await Promise.all([
     prisma.article.findMany({ where: visibleWhere(), select: { slug: true, updatedAt: true } }),
     prisma.blogPost.findMany({ where: visibleWhere(), select: { slug: true, updatedAt: true } }),
+    prisma.project.findMany({ where: visibleWhere(), select: { slug: true, updatedAt: true } }),
     prisma.category.findMany({ where: { articles: { some: visibleWhere() } }, select: { slug: true } }),
     prisma.tag.findMany({ where: { OR: [{ articles: { some: visibleWhere() } }, { blogPosts: { some: visibleWhere() } }] }, select: { slug: true } }),
   ]);
   const iso = <T extends { updatedAt: Date }>(xs: T[]) => xs.map((x) => ({ ...x, updatedAt: x.updatedAt.toISOString() }));
-  return { articles: iso(articles), posts: iso(posts), categories, tags };
+  return { articles: iso(articles), posts: iso(posts), projects: iso(projects), categories, tags };
 }, "sitemap");
 
 export type FeedItem = { title: string; url: string; description: string; publishedAt: string; html: string; kind: "article" | "blog" };

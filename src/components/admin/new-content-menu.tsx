@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { api } from "./api";
+import { createContent, type NewContentType } from "./new-content-button";
 import { Menu } from "@/components/ui/menu";
 import { PlusIcon } from "@/components/ui/icons";
 
@@ -10,11 +10,10 @@ import { PlusIcon } from "@/components/ui/icons";
 export function NewContentMenu() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  async function create(type: "blog" | "article") {
+  async function create(type: NewContentType) {
     setBusy(true);
     try {
-      const { id } = await api<{ id: string }>(type === "blog" ? "/api/admin/blog" : "/api/admin/articles", { method: "POST" });
-      router.push(`/admin/${type === "blog" ? "blog" : "articles"}/${id}`);
+      router.push(await createContent(type));
     } catch (e) {
       alert((e as Error).message);
       setBusy(false);
@@ -32,6 +31,7 @@ export function NewContentMenu() {
       items={[
         { label: "Blog post", onSelect: () => void create("blog") },
         { label: "Article", onSelect: () => void create("article") },
+        { label: "Project", onSelect: () => void create("project") },
       ]}
     />
   );

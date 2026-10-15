@@ -1,4 +1,5 @@
 import type { JSONContent } from "@tiptap/core";
+import type { ProjectPhase } from "../projects";
 
 /** Unsaved editor state handed from the editor tab to its preview tab (same browser only). */
 export type PreviewDraft = {
@@ -9,6 +10,8 @@ export type PreviewDraft = {
   publishedAt: string | null;
   categoryId: string | null;
   previewImage: { url: string; width: number; height: number; alt: string } | null;
+  /** Project-only fields. */
+  project?: { phase: ProjectPhase; repoUrl: string; siteUrl: string; packageUrl: string; stack: string[] };
   at: number;
 };
 

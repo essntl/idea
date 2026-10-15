@@ -9,9 +9,12 @@ import { Prose } from "@/components/site/prose";
 import { TableOfContents } from "@/components/site/toc";
 import { TagList } from "@/components/site/tag-list";
 import { DateText } from "@/components/site/date-text";
+import { PhaseBadge } from "@/components/site/projects/phase-badge";
+import { StackList } from "@/components/site/projects/stack-list";
+import { ProjectLinkButtons } from "@/components/site/projects/project-links";
 
 export type PreviewData = {
-  kind: "blog" | "article" | "page";
+  kind: "blog" | "article" | "project" | "page";
   id: string;
   title: string;
   description: string;
@@ -22,6 +25,7 @@ export type PreviewData = {
   publishedAt: string | null;
   categoryId: string | null;
   previewImage: { url: string; width: number; height: number; alt: string } | null;
+  project?: NonNullable<PreviewDraft["project"]>;
 };
 
 type Rendered = { html: string; toc: TocItem[]; readingTime: number };
@@ -93,6 +97,7 @@ export function PreviewView({ saved, categories }: { saved: PreviewData; categor
         publishedAt: draft.publishedAt,
         categoryId: draft.categoryId,
         previewImage: draft.previewImage,
+        project: draft.project ?? saved.project,
         html: rendered.html,
         toc: rendered.toc,
         readingTime: rendered.readingTime,
@@ -122,6 +127,43 @@ export function PreviewView({ saved, categories }: { saved: PreviewData; categor
         <article className="container-prose">
           <h1 className="mb-8 text-3xl font-semibold tracking-tight">{d.title || "About"}</h1>
           <Prose html={d.html} />
+        </article>
+      </>
+    );
+  }
+
+  if (d.kind === "project" && d.project) {
+    const links = { repoUrl: d.project.repoUrl || null, siteUrl: d.project.siteUrl || null, packageUrl: d.project.packageUrl || null };
+    return (
+      <>
+        {banner}
+        <article className="container-wide">
+          <header className="max-w-3xl">
+            <PhaseBadge phase={d.project.phase} />
+            <h1 className="mt-3 text-3xl leading-tight font-semibold tracking-tight sm:text-[2.5rem]">{d.title || "Untitled"}</h1>
+            {d.description && <p className="mt-3 text-lg text-muted">{d.description}</p>}
+            <div className="mt-6">
+              <ProjectLinkButtons links={links} />
+            </div>
+          </header>
+          {d.previewImage && (
+            <figure className="mt-8 sm:mt-10" data-zoomable>
+              <Image src={d.previewImage.url} alt={d.previewImage.alt} width={d.previewImage.width} height={d.previewImage.height} sizes="(min-width: 1024px) 976px, 100vw" priority className="max-h-[70vh] w-full rounded-[var(--radius-xl)] border border-line object-cover" />
+            </figure>
+          )}
+          <div className="mt-10 lg:grid lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-12">
+            <div className="min-w-0">
+              <Prose html={d.html} />
+            </div>
+            {d.project.stack.length > 0 && (
+              <aside className="mt-12 lg:mt-0">
+                <div className="card p-5">
+                  <h2 className="mb-3 text-sm font-medium text-muted">Built with</h2>
+                  <StackList stack={d.project.stack} />
+                </div>
+              </aside>
+            )}
+          </div>
         </article>
       </>
     );

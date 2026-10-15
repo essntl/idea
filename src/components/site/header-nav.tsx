@@ -10,6 +10,7 @@ import { ThemeToggle } from "./theme-toggle";
 const LINKS = [
   { href: "/blog", label: "Blog", hint: "Diary notes, newest first" },
   { href: "/articles", label: "Articles", hint: "Long-form writing" },
+  { href: "/projects", label: "Projects", hint: "What I'm building, with progress" },
   { href: "/about", label: "About", hint: "Who's writing this" },
 ];
 

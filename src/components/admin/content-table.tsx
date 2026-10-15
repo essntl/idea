@@ -22,17 +22,21 @@ export type ContentRow = {
   url: string | null;
   /** Live post with autosaved, unpublished changes. */
   pending?: boolean;
+  /** Projects: where the project stands ("Building", "Live", …). */
+  phase?: string;
 };
+
+const EDIT_BASE = { blog: "/admin/blog", article: "/admin/articles", project: "/admin/projects" } as const;
 
 const STATUS: Record<ContentRow["status"], string> = { draft: "Draft", published: "Published", scheduled: "Scheduled" };
 
 /** Card list of posts. Tap a row to edit; checkboxes select for bulk actions in a floating bar. */
-export function ContentTable({ type, rows }: { type: "blog" | "article"; rows: ContentRow[] }) {
+export function ContentTable({ type, rows }: { type: keyof typeof EDIT_BASE; rows: ContentRow[] }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const editBase = type === "blog" ? "/admin/blog" : "/admin/articles";
+  const editBase = EDIT_BASE[type];
   const allSelected = rows.length > 0 && selected.size === rows.length;
 
   function toggle(id: string, on: boolean) {
@@ -76,6 +80,7 @@ export function ContentTable({ type, rows }: { type: "blog" | "article"; rows: C
       <ul className="card divide-y divide-line overflow-hidden">
         {rows.map((r) => {
           const meta = [
+            type === "project" ? r.phase : null,
             type === "article" ? r.category : r.tags.slice(0, 3).join(", "),
             typeof r.comments === "number" && r.comments > 0 ? `${r.comments} comment${r.comments === 1 ? "" : "s"}` : null,
           ].filter(Boolean);

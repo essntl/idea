@@ -17,11 +17,12 @@ Built with Next.js 16, React 19, TypeScript, Tailwind CSS 4, PostgreSQL 16, Pris
 2. [ZimaOS](#zimaos)
 3. [HTTPS: reverse proxy or Cloudflare Tunnel](#https-reverse-proxy-or-cloudflare-tunnel)
 4. [Captcha keys](#captcha-keys)
-5. [Migrating from Ghost](#migrating-from-ghost)
-6. [Backup, restore and updates](#backup-restore-and-updates)
-7. [Local development](#local-development)
-8. [Configuration reference](#configuration-reference)
-9. [Project layout](#project-layout)
+5. [Projects and GitHub activity](#projects-and-github-activity)
+6. [Migrating from Ghost](#migrating-from-ghost)
+7. [Backup, restore and updates](#backup-restore-and-updates)
+8. [Local development](#local-development)
+9. [Configuration reference](#configuration-reference)
+10. [Project layout](#project-layout)
 
 ---
 
@@ -154,6 +155,18 @@ Every comment and reply is verified server-side. Choose a provider with `CAPTCHA
 - **Cloudflare Turnstile (default):** in the Cloudflare dashboard, go to **Turnstile → Add widget**, enter your domain (add `localhost` for testing), and pick the *Managed* mode. Copy the keys into `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY`.
   `.env.example` contains Cloudflare's public *test* keys, which let everyone pass. They're fine for trying the site out but must be replaced before going live (the app logs a warning while they're in use).
 - **Google reCAPTCHA v3:** go to <https://www.google.com/recaptcha/admin/create>, choose **Score based (v3)**, and add your domain. Set `CAPTCHA_PROVIDER=recaptcha`, `RECAPTCHA_SITE_KEY` and `RECAPTCHA_SECRET_KEY`. Comments with a score below 0.5 are rejected.
+
+---
+
+## Projects and GitHub activity
+
+**Admin → Projects** manages the `/projects` page. Each project has a status (Building, Live, Planning, Paused, Archived), a summary, an optional write-up and cover image, a tech stack, and up to three links: repository, website and package (npm, GHCR, PyPI, Docker Hub, app stores…). Featured projects are listed first and appear on the home page.
+
+- **Progress updates:** in a blog post's or article's settings, pick a **Project**. The post is then listed on the project page as a progress update, and the post links back to the project.
+- **Repository stats:** for GitHub repositories, project cards show stars, language and the last push; the project page also shows forks, open issues, the latest release and recent commits.
+- **GitHub activity:** the top of `/projects` shows your GitHub profile picture, public repositories, stars, followers, contributions, current and longest streak, a contribution graph, languages and recently pushed repositories. The account comes from the GitHub link in **Admin → Settings**; the widget can be turned off there.
+
+GitHub data is cached (profile 30 minutes, repositories 1 hour) and never blocks a page: if GitHub is slow or unreachable, the widgets are simply left out. No token is needed for a personal site. Set `GITHUB_TOKEN` (a fine-grained, read-only token with no extra permissions) to raise GitHub's limit from 60 to 5,000 requests an hour.
 
 ---
 
@@ -326,20 +339,21 @@ All settings are environment variables, documented in [`.env.example`](.env.exam
 | `CAPTCHA_PROVIDER` | `turnstile` | `turnstile` or `recaptcha` |
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | test keys | Cloudflare Turnstile |
 | `RECAPTCHA_SITE_KEY`, `RECAPTCHA_SECRET_KEY` | — | Google reCAPTCHA v3 |
+| `GITHUB_TOKEN` | — | Optional; higher GitHub API limit for the projects page |
 | `UPLOAD_DIR` | `/data/uploads` in Docker | Image storage |
 | `MAX_UPLOAD_MB` | `15` | Per image |
 | `TZ` | `UTC` | Timezone for displayed dates |
 | `APP_PORT` | `3000` | Host port (compose) |
 | `APP_IMAGE` | local build | e.g. `ghcr.io/essntl/idea:latest` |
 
-The site title, description, footer links, comment approval and comment on/off switches are edited in **Admin → Settings**. The footer defaults to artemk.dev, contact@artemk.dev and github.com/essntl.
+The site title, description, footer links, GitHub activity, comment approval and comment on/off switches are edited in **Admin → Settings**. The footer defaults to artemk.dev, contact@artemk.dev and github.com/essntl.
 
 ---
 
 ## Project layout
 
 ```
-src/app/(site)/        public pages (blog, articles, about, search)
+src/app/(site)/        public pages (blog, articles, projects, about, search)
 src/app/admin/         admin pages (panel, login, preview)
 src/app/api/           route handlers (comments, admin API, auth, health)
 src/app/media/         image serving with on-demand width variants

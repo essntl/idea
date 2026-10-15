@@ -31,7 +31,7 @@ export function ListFilters({
   values: Values;
   statuses: string[];
   categories?: Option[];
-  tags: Option[];
+  tags?: Option[];
 }) {
   const router = useRouter();
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -46,7 +46,7 @@ export function ListFilters({
   const active = [
     values.status && { key: "status", label: cap(values.status) },
     values.category && { key: "category", label: categories?.find((c) => c.slug === values.category)?.name ?? values.category },
-    values.tag && { key: "tag", label: `#${tags.find((t) => t.slug === values.tag)?.name ?? values.tag}` },
+    values.tag && { key: "tag", label: `#${tags?.find((t) => t.slug === values.tag)?.name ?? values.tag}` },
   ].filter(Boolean) as { key: keyof Values; label: string }[];
 
   const chipGroup = (title: string, key: keyof Values, options: { value: string; label: string }[]) => (
@@ -100,7 +100,9 @@ export function ListFilters({
           {categories && (
             <Select aria-label="Category" className="field w-40" value={values.category ?? ""} onChange={(v) => set({ category: v || undefined })} options={[{ value: "", label: "All categories" }, ...categories.map((c) => ({ value: c.slug, label: c.name }))]} />
           )}
-          <Select aria-label="Tag" className="field w-36" value={values.tag ?? ""} onChange={(v) => set({ tag: v || undefined })} options={[{ value: "", label: "All tags" }, ...tags.map((t) => ({ value: t.slug, label: t.name }))]} />
+          {tags && (
+            <Select aria-label="Tag" className="field w-36" value={values.tag ?? ""} onChange={(v) => set({ tag: v || undefined })} options={[{ value: "", label: "All tags" }, ...tags.map((t) => ({ value: t.slug, label: t.name }))]} />
+          )}
           <Select aria-label="Sort" className="field w-44" value={values.sort ?? "updated"} onChange={(v) => set({ sort: v })} options={SORTS} />
         </div>
       </div>
@@ -147,7 +149,7 @@ export function ListFilters({
       >
         {chipGroup("Status", "status", [{ value: "", label: "All" }, ...statuses.map((s) => ({ value: s, label: cap(s) }))])}
         {categories && categories.length > 0 && chipGroup("Category", "category", [{ value: "", label: "All" }, ...categories.map((c) => ({ value: c.slug, label: c.name }))])}
-        {tags.length > 0 && chipGroup("Tag", "tag", [{ value: "", label: "All" }, ...tags.map((t) => ({ value: t.slug, label: t.name }))])}
+        {tags && tags.length > 0 && chipGroup("Tag", "tag", [{ value: "", label: "All" }, ...tags.map((t) => ({ value: t.slug, label: t.name }))])}
         {chipGroup("Sort by", "sort", SORTS)}
       </Sheet>
     </div>

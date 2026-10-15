@@ -11,6 +11,7 @@ const ITEMS = [
   { href: "/admin", label: "Dashboard", exact: true },
   { href: "/admin/blog", label: "Blog posts" },
   { href: "/admin/articles", label: "Articles" },
+  { href: "/admin/projects", label: "Projects" },
   { href: "/admin/comments", label: "Comments" },
   { href: "/admin/media", label: "Media" },
   { href: "/admin/taxonomy", label: "Categories & tags" },

@@ -2,7 +2,7 @@ import { prisma } from "../db";
 
 export type InProgressItem = {
   key: string;
-  type: "Blog post" | "Article" | "Page";
+  type: "Blog post" | "Article" | "Project" | "Page";
   title: string;
   /** "draft" = never published; "edits" = live post with unpublished changes. */
   state: "draft" | "edits";
@@ -14,9 +14,10 @@ export type InProgressItem = {
 export async function listInProgress(limit = 8): Promise<InProgressItem[]> {
   const where = { OR: [{ status: "draft" as const }, { draftUpdatedAt: { not: null } }] };
   const select = { id: true, title: true, status: true, updatedAt: true, draftUpdatedAt: true } as const;
-  const [posts, articles, pages] = await Promise.all([
+  const [posts, articles, projects, pages] = await Promise.all([
     prisma.blogPost.findMany({ where, select, orderBy: { updatedAt: "desc" }, take: limit }),
     prisma.article.findMany({ where, select, orderBy: { updatedAt: "desc" }, take: limit }),
+    prisma.project.findMany({ where, select, orderBy: { updatedAt: "desc" }, take: limit }),
     prisma.page.findMany({ where: { draftUpdatedAt: { not: null } }, select: { key: true, title: true, draftUpdatedAt: true } }),
   ]);
   const items: InProgressItem[] = [
@@ -27,6 +28,10 @@ export async function listInProgress(limit = 8): Promise<InProgressItem[]> {
     ...articles.map((a) => ({
       key: `article:${a.id}`, type: "Article" as const, title: a.title, state: a.status === "draft" ? ("draft" as const) : ("edits" as const),
       at: (a.draftUpdatedAt ?? a.updatedAt).toISOString(), href: `/admin/articles/${a.id}`,
+    })),
+    ...projects.map((p) => ({
+      key: `project:${p.id}`, type: "Project" as const, title: p.title, state: p.status === "draft" ? ("draft" as const) : ("edits" as const),
+      at: (p.draftUpdatedAt ?? p.updatedAt).toISOString(), href: `/admin/projects/${p.id}`,
     })),
     ...pages.map((p) => ({
       key: `page:${p.key}`, type: "Page" as const, title: p.title || p.key, state: "edits" as const,
