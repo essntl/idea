@@ -14,7 +14,8 @@ One line each; where the brief was silent or a choice had to be made.
 ## Rendering & caching
 - Every page renders on demand (the root layout reads the CSP nonce), so `next build` never needs a database; data is cached with `unstable_cache` (tags `content`, `comments`, `settings`, `redirects`) and invalidated immediately on publish/edit — this is the "revalidation on publish".
 - Cached reads also revalidate every 60 s so scheduled articles go live without a manual action.
-- Public page fade uses a CSS animation in `template.tsx`, enabled only after the first client navigation (no delay to the initial paint/LCP); disabled under `prefers-reduced-motion`.
+- Page transitions are a ~200 ms cross-fade via React `<ViewTransition>` (View Transitions API) around page content in the site and admin layouts; header and sidebar stay still. Browsers without the API just swap pages; `prefers-reduced-motion` disables it.
+- Visual style (revised): rounded corners from radius tokens (6/10/14/18 px), soft surfaces instead of hard boxes, and a subtle shadow on floating UI only (menus, toolbars, dialogs). Still strictly black, white and grays.
 
 ## Content model
 - **Tags are shared** between blog posts and articles (one `Tag` table, two many-to-many relations); categories are articles-only.
@@ -25,7 +26,7 @@ One line each; where the brief was silent or a choice had to be made.
 - Blog post URLs are `/blog/<yyyy-mm-dd>-<title-slug>`; the slug follows the title until the post is first published, then freezes.
 - Article slugs are editable, validated live, and must not collide with root routes (`admin`, `blog`, …); renaming a published article's slug adds a 301 from the old URL.
 - "Scheduled" = status `scheduled` + a future `publishedAt`; it becomes visible automatically when the time passes. Publishing with a past date backdates.
-- Autosave only for drafts; changes to published posts go live only when "Update" is pressed.
+- Autosave is on for everything (about 1 s after you stop typing). See "Drafts and pending changes" under Revisions.
 - Added fields beyond the brief: `contentText` (search), `toc`, `User.sessionVersion` (password change signs out other sessions), `User.lastSeenCommentsAt` (dashboard "new" count), `Media.sourceUrl` (import de-duplication), `RateLimit` table.
 
 ## Media
@@ -62,3 +63,11 @@ One line each; where the brief was silent or a choice had to be made.
 - Image name is `ghcr.io/essntl/idea` (from the repository https://github.com/essntl/idea); the workflow derives it from `${{ github.repository }}`.
 - Backups: a `.tar.gz` with `backup.json` (all content tables, no users) + every media file; restore replaces content in one transaction.
 - Site language is `en`; dates are formatted `en-GB` in the `TZ` timezone.
+
+## Revisions after first release
+- **Blog posts have comments too** (the original brief said articles only). `Comment` has nullable `articleId` and `blogPostId` with a CHECK constraint requiring exactly one; the API takes `targetType` (`article` | `blog`) + `targetId`. Same captcha, honeypot, rate limit and approval rules for both.
+- **Dropdowns** use a custom `Select` (src/components/ui/select.tsx) instead of native `<select>`, because the open list of a native select can't be styled. It renders its list in a portal (never clipped by scrolling toolbars), supports full keyboard use and type-ahead, and can post its value through a hidden input in plain GET forms.
+- **Image lightbox**: clicking an image in a blog post or article (and the article cover) opens the 2000 px variant full-screen; click toggles actual size, ←/→ moves between images, Esc closes. Nothing loads until an image is clicked.
+- **Preview shows unsaved changes.** The editor hands its current state to the preview tab via `localStorage` + `BroadcastChannel` (same browser only); the preview renders it through the normal sanitizing pipeline (`POST /api/admin/preview`, nothing stored) and keeps updating while you edit. Opening `/admin/preview/...` directly shows the saved version.
+- **Drafts and pending changes.** Never-published posts autosave in place and stay invisible until published. Live content (published or scheduled posts, the About page) autosaves into a separate `draft` JSON column (+ `draftUpdatedAt`) via `PUT /api/admin/drafts/[kind]/[id]`; public pages keep reading the published columns. "Publish changes" runs the normal save (validation, rendering, redirects) and clears the draft; "Discard changes" deletes it. Drafts are validated loosely (half-written titles/slugs are fine) and never carry a status, so publishing is always an explicit action. The dashboard lists drafts and pending changes under "Continue writing"; lists mark pending changes with an "edits" pill.
+- Page transitions are keyed to the URL (`PageTransition`), so navigation cross-fades but `router.refresh()` after a save doesn't.

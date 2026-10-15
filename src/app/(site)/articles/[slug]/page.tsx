@@ -94,7 +94,7 @@ export default async function ArticlePage({ params }: PageProps<"/articles/[slug
       </header>
 
       {article.previewImage && (
-        <figure className="container-wide mt-8 sm:mt-10">
+        <figure className="container-wide mt-8 sm:mt-10" data-zoomable>
           <Image
             src={article.previewImage.url}
             alt={article.previewImage.alt || ""}
@@ -102,7 +102,7 @@ export default async function ArticlePage({ params }: PageProps<"/articles/[slug
             height={article.previewImage.height}
             sizes="(min-width: 1024px) 976px, 100vw"
             priority
-            className="mx-auto max-h-[70vh] w-full border border-line object-cover"
+            className="mx-auto max-h-[70vh] w-full rounded-[var(--radius-xl)] object-cover"
           />
         </figure>
       )}
@@ -118,29 +118,29 @@ export default async function ArticlePage({ params }: PageProps<"/articles/[slug
         )}
 
         {(prev || next) && (
-          <nav aria-label="More articles" className="mt-10 grid gap-px border-y border-line sm:grid-cols-2">
+          <nav aria-label="More articles" className="mt-10 grid gap-3 sm:grid-cols-2">
             {prev ? (
-              <Link href={`/articles/${prev.slug}`} className="group flex min-h-16 flex-col justify-center py-4 sm:pr-4">
+              <Link href={`/articles/${prev.slug}`} className="group flex min-h-16 flex-col justify-center rounded-[var(--radius-lg)] border border-line px-4 py-3 hover:bg-surface">
                 <span className="flex items-center gap-1.5 text-sm text-muted">
                   <ArrowLeft width={14} height={14} /> Previous
                 </span>
-                <span className="mt-1 font-medium group-hover:underline">{prev.title}</span>
+                <span className="mt-1 font-medium">{prev.title}</span>
               </Link>
             ) : (
               <span className="hidden sm:block" />
             )}
             {next && (
-              <Link href={`/articles/${next.slug}`} className="group flex min-h-16 flex-col justify-center border-t border-line py-4 sm:border-t-0 sm:border-l sm:pl-4 sm:text-right">
+              <Link href={`/articles/${next.slug}`} className="group flex min-h-16 flex-col justify-center rounded-[var(--radius-lg)] border border-line px-4 py-3 hover:bg-surface sm:col-start-2 sm:text-right">
                 <span className="flex items-center gap-1.5 text-sm text-muted sm:justify-end">
                   Next <ArrowRight width={14} height={14} />
                 </span>
-                <span className="mt-1 font-medium group-hover:underline">{next.title}</span>
+                <span className="mt-1 font-medium">{next.title}</span>
               </Link>
             )}
           </nav>
         )}
 
-        <CommentSection articleId={article.id} />
+        <CommentSection targetType="article" targetId={article.id} />
       </div>
 
       {related.length > 0 && (

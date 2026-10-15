@@ -4,6 +4,9 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "./api";
 import { CommentRow, type AdminComment } from "./comment-row";
+import { ActionBar } from "./action-bar";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Menu } from "@/components/ui/menu";
 
 export function CommentsModeration({ comments }: { comments: AdminComment[] }) {
   const router = useRouter();
@@ -26,48 +29,54 @@ export function CommentsModeration({ comments }: { comments: AdminComment[] }) {
     }
   }
 
-  if (!comments.length) return <p className="border-y border-line py-10 text-center text-muted">No comments.</p>;
+  if (!comments.length) return <p className="rounded-[var(--radius-lg)] border border-dashed border-line-strong py-10 text-center text-muted">No comments here.</p>;
+  const all = selected.size === comments.length;
   return (
-    <div>
-      <div className="sticky top-14 z-10 flex min-h-11 flex-wrap items-center gap-2 border-b border-line bg-bg py-2 text-sm lg:top-0">
-        <label className="tap gap-2">
-          <input
-            type="checkbox"
-            className="size-4 accent-current"
-            checked={selected.size === comments.length}
-            onChange={(e) => setSelected(e.target.checked ? new Set(comments.map((c) => c.id)) : new Set())}
-          />
-          Select all
-        </label>
-        {selected.size > 0 && (
-          <>
-            <span className="text-muted">{selected.size} selected</span>
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => bulk("approve")}>Approve</button>
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => bulk("hide")}>Hide</button>
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => bulk("show")}>Show</button>
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => bulk("delete")}>Delete</button>
-          </>
-        )}
-        {error && <span role="alert" className="font-medium">{error}</span>}
+    <div className="pb-20">
+      <div className="mb-1 pl-1">
+        <Checkbox
+          checked={all}
+          indeterminate={selected.size > 0 && !all}
+          onChange={(on) => setSelected(on ? new Set(comments.map((c) => c.id)) : new Set())}
+          label={<span className="text-muted">{selected.size ? `${selected.size} selected` : "Select all"}</span>}
+        />
       </div>
-      <div className="divide-y divide-line">
+      <ul className="space-y-3">
         {comments.map((c) => (
-          <CommentRow
-            key={c.id}
-            c={c}
-            selectable
-            selected={selected.has(c.id)}
-            onSelect={(on) =>
-              setSelected((s) => {
-                const n = new Set(s);
-                if (on) n.add(c.id);
-                else n.delete(c.id);
-                return n;
-              })
-            }
-          />
+          <li key={c.id}>
+            <CommentRow
+              c={c}
+              selectable
+              selected={selected.has(c.id)}
+              onSelect={(on) =>
+                setSelected((s) => {
+                  const n = new Set(s);
+                  if (on) n.add(c.id);
+                  else n.delete(c.id);
+                  return n;
+                })
+              }
+            />
+          </li>
         ))}
-      </div>
+      </ul>
+      {selected.size > 0 && (
+        <ActionBar label={error ?? `${selected.size} selected`}>
+          <button type="button" className="btn btn-sm" disabled={busy} onClick={() => bulk("approve")}>
+            Approve
+          </button>
+          <Menu
+            label="More bulk actions"
+            className="border border-line-strong"
+            items={[
+              { label: "Hide", onSelect: () => bulk("hide") },
+              { label: "Show", onSelect: () => bulk("show") },
+              "separator",
+              { label: "Delete", destructive: true, onSelect: () => bulk("delete") },
+            ]}
+          />
+        </ActionBar>
+      )}
     </div>
   );
 }

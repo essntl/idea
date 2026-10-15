@@ -6,6 +6,7 @@ import { DateText } from "@/components/site/date-text";
 import { Prose } from "@/components/site/prose";
 import { TagList } from "@/components/site/tag-list";
 import { ArrowLeft } from "@/components/ui/icons";
+import { CommentSection } from "@/components/site/comments/comment-section";
 
 export async function generateMetadata({ params }: PageProps<"/blog/[slug]">): Promise<Metadata> {
   const post = await getBlogPost((await params).slug);
@@ -39,6 +40,7 @@ export default async function BlogPostPage({ params }: PageProps<"/blog/[slug]">
           <ArrowLeft width={16} height={16} /> All posts
         </Link>
       </footer>
+      <CommentSection targetType="blog" targetId={post.id} />
     </article>
   );
 }

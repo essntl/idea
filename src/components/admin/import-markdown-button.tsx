@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "./api";
 import { pickFiles } from "./editor/upload";
+import { Menu } from "@/components/ui/menu";
 
 type Result = { filename: string; id: string; title: string; unresolvedImages: string[]; warnings: string[] };
 
-/** Imports one or more .md files as drafts and lists what happened. */
+/** "⋯" menu with "Import markdown files…": imports .md files as drafts and lists what happened. */
 export function ImportMarkdownButton({ type }: { type: "blog" | "article" }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -35,11 +36,9 @@ export function ImportMarkdownButton({ type }: { type: "blog" | "article" }) {
 
   return (
     <>
-      <button type="button" className="btn btn-ghost" onClick={run} disabled={busy}>
-        {busy ? "Importing…" : "Import markdown"}
-      </button>
+      <Menu label="More" items={[{ label: busy ? "Importing…" : "Import markdown files…", onSelect: run, disabled: busy }]} className="border border-line-strong" />
       {report && (
-        <div className="fixed inset-x-4 bottom-4 z-50 max-h-[60dvh] overflow-y-auto rounded border border-line-strong bg-bg p-4 text-sm sm:right-6 sm:left-auto sm:w-[28rem]" role="status">
+        <div className="fixed inset-x-4 bottom-4 z-50 max-h-[60dvh] animate-sheet-in overflow-y-auto floating p-4 text-sm sm:right-6 sm:left-auto sm:w-[28rem]" role="status">
           <div className="mb-2 flex items-center justify-between">
             <strong>Import finished</strong>
             <button type="button" className="tap px-2 underline" onClick={() => setReport(null)}>Close</button>

@@ -5,7 +5,7 @@ export function TableOfContents({ items }: { items: TocItem[] }) {
   if (items.length < 2) return null;
   const minLevel = Math.min(...items.map((i) => i.level));
   return (
-    <details className="group mb-10 border-y border-line" open>
+    <details className="group mb-10 rounded-[var(--radius-lg)] bg-surface px-4" open>
       <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between text-sm font-medium [&::-webkit-details-marker]:hidden">
         Contents
         <ChevronDown width={16} height={16} className="transition-transform group-open:rotate-180" />

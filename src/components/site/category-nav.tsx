@@ -9,7 +9,7 @@ export async function CategoryNav({ active }: { active?: string }) {
       <Link
         href={href}
         aria-current={current ? "page" : undefined}
-        className={`inline-flex min-h-9 items-center rounded-full border px-3 text-sm ${current ? "border-fg bg-fg text-bg" : "border-line-strong text-muted hover:border-fg hover:text-fg"}`}
+        className={`inline-flex min-h-9 items-center rounded-full border px-3 text-sm ${current ? "border-fg bg-fg text-bg" : "border-line text-muted hover:bg-surface hover:text-fg"}`}
       >
         {label}
       </Link>

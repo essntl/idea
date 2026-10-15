@@ -170,11 +170,11 @@ export const getTag = cached(async (slug: string) => {
 /* -------------------------------- Comments ------------------------------- */
 
 export type CommentNode = {
-  id: string; parentId: string | null; authorName: string; body: string; isAdminReply: boolean;
+  id: string; parentId: string | null; authorName: string; body: string; bodyHtml: string | null; isAdminReply: boolean;
   createdAt: string; removed: boolean; children: CommentNode[];
 };
 
-type CommentRow = { id: string; parentId: string | null; authorName: string; body: string; isAdminReply: boolean; createdAt: Date; status: string };
+type CommentRow = { id: string; parentId: string | null; authorName: string; body: string; bodyHtml?: string | null; isAdminReply: boolean; createdAt: Date; status: string };
 
 /** Builds the public thread. Hidden/deleted comments are kept as "removed" placeholders only if they have visible replies. */
 export function buildCommentTree(rows: CommentRow[]): CommentNode[] {
@@ -183,7 +183,7 @@ export function buildCommentTree(rows: CommentRow[]): CommentNode[] {
     const visible = r.status === "visible";
     nodes.set(r.id, {
       id: r.id, parentId: r.parentId, createdAt: r.createdAt.toISOString(), isAdminReply: visible && r.isAdminReply,
-      authorName: visible ? r.authorName : "", body: visible ? r.body : "", removed: !visible, children: [],
+      authorName: visible ? r.authorName : "", body: visible ? r.body : "", bodyHtml: visible ? (r.bodyHtml ?? null) : null, removed: !visible, children: [],
     });
   }
   const roots: CommentNode[] = [];
@@ -201,11 +201,11 @@ export function buildCommentTree(rows: CommentRow[]): CommentNode[] {
 }
 
 export const getComments = cached(
-  async (articleId: string): Promise<{ tree: CommentNode[]; count: number }> => {
+  async (targetType: "article" | "blog", targetId: string): Promise<{ tree: CommentNode[]; count: number }> => {
     const rows = await prisma.comment.findMany({
-      where: { articleId, status: { in: ["visible", "hidden", "deleted"] } },
+      where: { ...(targetType === "article" ? { articleId: targetId } : { blogPostId: targetId }), status: { in: ["visible", "hidden", "deleted"] } },
       orderBy: { createdAt: "asc" },
-      select: { id: true, parentId: true, authorName: true, body: true, isAdminReply: true, createdAt: true, status: true },
+      select: { id: true, parentId: true, authorName: true, body: true, bodyHtml: true, isAdminReply: true, createdAt: true, status: true },
     });
     return { tree: buildCommentTree(rows), count: rows.filter((r) => r.status === "visible").length };
   },

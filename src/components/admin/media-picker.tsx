@@ -62,7 +62,7 @@ export function MediaPicker({ open, onClose, onSelect, title = "Choose an image"
       ref={dialogRef}
       onClose={onClose}
       onCancel={onClose}
-      className="m-0 h-dvh max-h-none w-full max-w-none bg-bg p-0 text-fg backdrop:bg-black/50 sm:m-auto sm:h-[80vh] sm:max-w-3xl sm:rounded sm:border sm:border-line-strong"
+      className="m-0 h-dvh max-h-none w-full max-w-none bg-bg p-0 text-fg backdrop:bg-black/50 sm:m-auto sm:h-[80vh] sm:max-w-3xl sm:rounded-[var(--radius-xl)] sm:border sm:border-line sm:shadow-[var(--shadow-float)]"
     >
       <div className="flex h-full flex-col">
         <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2">
@@ -94,7 +94,7 @@ export function MediaPicker({ open, onClose, onSelect, title = "Choose an image"
               {items.map((m) => (
                 <li key={m.id}>
                   <button type="button" onClick={() => onSelect(m)} className="group block w-full text-left">
-                    <span className="block aspect-square overflow-hidden border border-line bg-surface group-hover:border-fg">
+                    <span className="block aspect-square overflow-hidden rounded-[var(--radius-md)] bg-surface ring-offset-2 ring-offset-bg transition-shadow group-hover:ring-2 group-hover:ring-fg">
                       {/* eslint-disable-next-line @next/next/no-img-element -- admin thumbnails */}
                       <img src={`${m.url}?w=320`} alt={m.alt} className="size-full object-cover" loading="lazy" />
                     </span>

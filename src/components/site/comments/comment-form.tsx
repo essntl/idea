@@ -1,11 +1,20 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { Captcha, type CaptchaHandle, type CaptchaProps } from "./captcha";
+import type { CommentEditorHandle } from "./comment-editor";
+
+// The editor (TipTap) and captcha load only once someone starts writing.
+const CommentEditor = dynamic(() => import("./comment-editor"), {
+  ssr: false,
+  loading: () => <div className="h-[132px] rounded-[var(--radius-md)] border border-line-strong" aria-hidden="true" />,
+});
 
 type Props = {
-  articleId: string;
+  targetType: "article" | "blog";
+  targetId: string;
   parentId?: string;
   captcha: CaptchaProps;
   onDone?: () => void;
@@ -14,13 +23,15 @@ type Props = {
 
 const STORE_KEY = "comment-author";
 
-export function CommentForm({ articleId, parentId, captcha, onDone, autoFocus }: Props) {
+export function CommentForm({ targetType, targetId, parentId, captcha, onDone, autoFocus }: Props) {
   const router = useRouter();
   const id = useId();
   const captchaRef = useRef<CaptchaHandle>(null);
+  const editorRef = useRef<CommentEditorHandle>(null);
+  const [expanded, setExpanded] = useState(!!parentId);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [body, setBody] = useState("");
+  const [hasText, setHasText] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ kind: "error" | "ok"; text: string } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -53,11 +64,12 @@ export function CommentForm({ articleId, parentId, captcha, onDone, autoFocus }:
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          articleId,
+          targetType,
+          targetId,
           parentId: parentId ?? null,
           authorName: name,
           authorEmail: email,
-          body,
+          bodyJson: editorRef.current?.getJSON(),
           captchaToken,
           website: form.get("website") ?? "",
         }),
@@ -72,7 +84,8 @@ export function CommentForm({ articleId, parentId, captcha, onDone, autoFocus }:
       try {
         localStorage.setItem(STORE_KEY, JSON.stringify({ name, email }));
       } catch {}
-      setBody("");
+      editorRef.current?.clear();
+      setHasText(false);
       captchaRef.current?.reset();
       if (data.status === "pending") {
         setMessage({ kind: "ok", text: "Thanks! Your comment will appear after moderation." });
@@ -88,6 +101,18 @@ export function CommentForm({ articleId, parentId, captcha, onDone, autoFocus }:
     }
   }
 
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="flex min-h-14 w-full items-center rounded-[var(--radius-lg)] border border-line-strong px-4 text-left text-subtle transition-colors hover:border-fg hover:text-muted"
+      >
+        Write a comment…
+      </button>
+    );
+  }
+
   const fieldError = (k: string) =>
     fieldErrors[k] ? (
       <p id={`${id}-${k}-err`} className="mt-1 text-sm font-medium">
@@ -96,8 +121,22 @@ export function CommentForm({ articleId, parentId, captcha, onDone, autoFocus }:
     ) : null;
 
   return (
-    <form onSubmit={submit} className="space-y-4" noValidate>
-      <div className="grid gap-4 sm:grid-cols-2">
+    <form onSubmit={submit} className="space-y-4 animate-menu-in" noValidate>
+      <div>
+        <span id={`${id}-body-label`} className="sr-only">
+          {parentId ? "Reply" : "Comment"}
+        </span>
+        <CommentEditor
+          handleRef={editorRef}
+          aria-labelledby={`${id}-body-label`}
+          placeholder={parentId ? "Write a reply…" : "Write a comment…"}
+          autoFocus={autoFocus ?? true}
+          onChange={(t) => setHasText(t.trim().length >= 2)}
+          invalid={!!fieldErrors.body}
+        />
+        {fieldError("body")}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label htmlFor={`${id}-name`} className="mb-1 block text-sm font-medium">
             Name
@@ -117,7 +156,7 @@ export function CommentForm({ articleId, parentId, captcha, onDone, autoFocus }:
         </div>
         <div>
           <label htmlFor={`${id}-email`} className="mb-1 block text-sm font-medium">
-            Email <span className="font-normal text-muted">(optional, never shown)</span>
+            Email <span className="font-normal text-subtle">· optional, never shown</span>
           </label>
           <input
             id={`${id}-email`}
@@ -133,38 +172,23 @@ export function CommentForm({ articleId, parentId, captcha, onDone, autoFocus }:
           {fieldError("authorEmail")}
         </div>
       </div>
-      <div>
-        <label htmlFor={`${id}-body`} className="mb-1 block text-sm font-medium">
-          {parentId ? "Reply" : "Comment"}
-        </label>
-        <textarea
-          id={`${id}-body`}
-          className="field min-h-32 resize-y"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          required
-          maxLength={5000}
-          autoFocus={autoFocus}
-          aria-invalid={!!fieldErrors.body}
-          aria-describedby={fieldErrors.body ? `${id}-body-err` : undefined}
-        />
-        {fieldError("body")}
-      </div>
       {/* Honeypot: hidden from people and assistive tech; bots tend to fill it. */}
       <div aria-hidden="true" className="absolute -left-[9999px] h-px w-px overflow-hidden">
         <label htmlFor={`${id}-website`}>Website</label>
         <input id={`${id}-website`} name="website" tabIndex={-1} autoComplete="off" />
       </div>
-      <Captcha ref={captchaRef} {...captcha} />
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" className="btn" disabled={busy || !name.trim() || body.trim().length < 2}>
-          {busy ? "Sending…" : parentId ? "Post reply" : "Post comment"}
-        </button>
-        {onDone && (
-          <button type="button" className="btn btn-ghost" onClick={onDone}>
-            Cancel
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <Captcha ref={captchaRef} {...captcha} />
+        <div className="flex gap-2 sm:shrink-0">
+          {onDone && (
+            <button type="button" className="btn btn-ghost flex-1 sm:flex-none" onClick={onDone}>
+              Cancel
+            </button>
+          )}
+          <button type="submit" className="btn flex-1 sm:flex-none" disabled={busy || !name.trim() || !hasText}>
+            {busy ? "Sending…" : parentId ? "Post reply" : "Post comment"}
           </button>
-        )}
+        </div>
       </div>
       {message && (
         <p role={message.kind === "error" ? "alert" : "status"} className={message.kind === "error" ? "text-sm font-medium" : "text-sm text-muted"}>

@@ -130,7 +130,7 @@ const SlashMenu = forwardRef<MenuHandle, SuggestionProps<Item, Item>>(function S
   }));
 
   return (
-    <div ref={listRef} role="listbox" aria-label="Insert block" className="max-h-80 w-64 animate-menu-in overflow-y-auto rounded border border-line-strong bg-bg py-1 text-fg">
+    <div ref={listRef} role="listbox" aria-label="Insert block" className="floating max-h-80 w-64 animate-menu-in overflow-y-auto p-1 text-fg">
       {items.length ? (
         items.map((item, i) => (
           <button
@@ -142,7 +142,7 @@ const SlashMenu = forwardRef<MenuHandle, SuggestionProps<Item, Item>>(function S
             onMouseEnter={() => setIndex(i)}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => command(item)}
-            className={`flex w-full flex-col items-start px-3 py-2 text-left ${i === index ? "bg-surface" : ""}`}
+            className={`flex w-full flex-col items-start rounded-[var(--radius-sm)] px-3 py-2 text-left ${i === index ? "bg-surface-2" : ""}`}
           >
             <span className="text-sm font-medium">{item.title}</span>
             <span className="text-xs text-muted">{item.hint}</span>

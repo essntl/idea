@@ -93,7 +93,7 @@ export function MediaLibrary({ items }: { items: MediaItem[] }) {
         setDragging(false);
         void upload(Array.from(e.dataTransfer.files));
       }}
-      className={dragging ? "outline-2 outline-offset-4 outline-fg outline-dashed" : ""}
+      className={`rounded-[var(--radius-lg)] ${dragging ? "outline-2 outline-offset-4 outline-fg outline-dashed" : ""}`}
     >
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <button type="button" className="btn" disabled={busy} onClick={async () => upload(await pickFiles())}>
@@ -104,13 +104,13 @@ export function MediaLibrary({ items }: { items: MediaItem[] }) {
       {message && <p role="status" className="mb-4 text-sm">{message}</p>}
 
       {items.length === 0 ? (
-        <p className="border-y border-line py-10 text-center text-muted">No images yet.</p>
+        <p className="rounded-[var(--radius-lg)] border border-dashed border-line-strong py-10 text-center text-muted">No images yet.</p>
       ) : (
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {items.map((m) => (
             <li key={m.id}>
               <button type="button" onClick={() => open(m)} className="group block w-full text-left">
-                <span className={`block aspect-square overflow-hidden border bg-surface ${active?.id === m.id ? "border-fg" : "border-line group-hover:border-fg"}`}>
+                <span className={`block aspect-square overflow-hidden rounded-[var(--radius-md)] bg-surface ring-offset-2 ring-offset-bg transition-shadow ${active?.id === m.id ? "ring-2 ring-fg" : "group-hover:ring-1 group-hover:ring-line-strong"}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element -- admin thumbnails */}
                   <img src={`${m.url}?w=320`} alt={m.alt} loading="lazy" className="size-full object-cover" />
                 </span>
@@ -124,7 +124,7 @@ export function MediaLibrary({ items }: { items: MediaItem[] }) {
       {active && (
         <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Image details">
           <button type="button" className="absolute inset-0 bg-black/50" aria-label="Close" onClick={() => setActive(null)} />
-          <div className="absolute inset-x-0 bottom-0 max-h-[90dvh] animate-menu-in overflow-y-auto border-t border-line-strong bg-bg p-4 sm:inset-y-0 sm:right-0 sm:left-auto sm:max-h-none sm:w-96 sm:border-t-0 sm:border-l">
+          <div className="absolute inset-x-0 bottom-0 max-h-[90dvh] animate-sheet-in overflow-y-auto rounded-t-[var(--radius-xl)] bg-bg p-4 shadow-[var(--shadow-float)] sm:inset-y-2 sm:right-2 sm:left-auto sm:max-h-none sm:w-96 sm:rounded-[var(--radius-xl)] sm:border sm:border-line">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-semibold">Image</h2>
               <button type="button" className="tap justify-center" onClick={() => setActive(null)} aria-label="Close">
@@ -132,7 +132,7 @@ export function MediaLibrary({ items }: { items: MediaItem[] }) {
               </button>
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element -- admin preview */}
-            <img src={`${active.url}?w=768`} alt={active.alt} className="w-full border border-line" />
+            <img src={`${active.url}?w=768`} alt={active.alt} className="w-full rounded-[var(--radius-md)]" />
             <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
               <dt className="text-muted">File</dt>
               <dd className="truncate">{active.filename}</dd>

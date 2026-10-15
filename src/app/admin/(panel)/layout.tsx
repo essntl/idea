@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PageTransition } from "@/components/ui/page-transition";
 import { requireAdminPage } from "@/lib/guard";
 import { prisma } from "@/lib/db";
 import { AdminNav } from "@/components/admin/admin-nav";
@@ -12,7 +13,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="min-h-dvh lg:flex">
       <AdminNav email={admin.email} pendingComments={pending} />
       <main id="main" className="min-w-0 flex-1 px-4 pt-6 pb-24 sm:px-6 lg:px-10 lg:pt-10">
-        {children}
+        <PageTransition>{children}</PageTransition>
       </main>
     </div>
   );

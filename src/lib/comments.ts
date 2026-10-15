@@ -1,6 +1,9 @@
 import { z } from "zod";
 import type { Db } from "./db";
 import type { CaptchaProvider } from "./captcha";
+import type { JSONContent } from "@tiptap/core";
+import { renderComment } from "./content/comment-render";
+import { COMMENT_DOC_MAX_BYTES } from "./content/comment-schema";
 
 export const COMMENT_LIMITS = {
   nameMax: 60,
@@ -12,12 +15,24 @@ export const COMMENT_LIMITS = {
   maxDepth: 3,
 };
 
+export const COMMENT_TARGETS = ["article", "blog"] as const;
+export type CommentTarget = (typeof COMMENT_TARGETS)[number];
+
+export const commentDocSchema = z
+  .custom<JSONContent>((v) => typeof v === "object" && v !== null && (v as JSONContent).type === "doc", "Invalid comment")
+  .refine((v) => JSON.stringify(v).length <= COMMENT_DOC_MAX_BYTES, "Comment is too long");
+
 export const commentInputSchema = z.object({
-  articleId: z.string().min(1).max(40),
+  /** What is being commented on: an article or a blog post. */
+  targetType: z.enum(COMMENT_TARGETS),
+  targetId: z.string().min(1).max(40),
   parentId: z.string().min(1).max(40).nullable().optional(),
   authorName: z.string().trim().min(1, "Name is required").max(COMMENT_LIMITS.nameMax),
   authorEmail: z.string().trim().toLowerCase().max(200).email("Invalid email").or(z.literal("")).optional(),
-  body: z.string().trim().min(2, "Comment is too short").max(COMMENT_LIMITS.bodyMax, "Comment is too long"),
+  /** Plain text (older clients, tests). Ignored when `bodyJson` is present. */
+  body: z.string().max(COMMENT_LIMITS.bodyMax * 2).optional(),
+  /** Rich text from the comment editor. */
+  bodyJson: commentDocSchema.optional(),
   captchaToken: z.string().max(4096).default(""),
   /** Honeypot: real users never fill this hidden field. */
   website: z.string().max(500).optional(),
@@ -35,11 +50,33 @@ export function cleanText(text: string): string {
 }
 
 export type CommentDeps = {
-  db: Pick<Db, "comment" | "article">;
+  db: Pick<Db, "comment" | "article" | "blogPost">;
   verifyCaptcha: (provider: CaptchaProvider, token: string, ip?: string) => Promise<boolean>;
   rateLimit: (key: string, limit: number, windowSec: number) => Promise<{ ok: boolean; retryAfterSec: number }>;
   settings: { captchaProvider: CaptchaProvider; requireApproval: boolean; enabled: boolean };
 };
+
+export type CommentBody = { body: string; bodyHtml: string | null; links: number };
+
+/**
+ * Turns submitted content into what is stored: rich text is rendered + sanitized (`bodyHtml`) and
+ * `body` becomes its plain text. Length and link limits are checked by the caller on these values.
+ */
+export async function prepareCommentBody(input: { body?: string; bodyJson?: JSONContent }): Promise<CommentBody> {
+  if (input.bodyJson) {
+    const r = await renderComment(input.bodyJson);
+    return { body: cleanText(r.text).trim(), bodyHtml: r.html, links: r.links };
+  }
+  const body = cleanText(input.body ?? "").trim();
+  return { body, bodyHtml: null, links: countLinks(body) };
+}
+
+export function checkCommentBody(b: CommentBody): string | null {
+  if (b.body.length < 2) return "Comment is too short";
+  if (b.body.length > COMMENT_LIMITS.bodyMax) return "Comment is too long";
+  if (b.links > COMMENT_LIMITS.maxLinks) return `Please include at most ${COMMENT_LIMITS.maxLinks} links`;
+  return null;
+}
 
 export type CommentResult =
   | { ok: true; status: "visible" | "pending"; id: string }
@@ -61,10 +98,9 @@ export async function createComment(input: unknown, ctx: { ip: string; ipHash: s
     // Pretend success to bots without storing anything.
     return { ok: true, status: "pending", id: "discarded" };
   }
-  const body = cleanText(data.body);
-  if (countLinks(body) > COMMENT_LIMITS.maxLinks) {
-    return { ok: false, status: 400, error: `Please include at most ${COMMENT_LIMITS.maxLinks} links`, fieldErrors: { body: "Too many links" } };
-  }
+  const content = await prepareCommentBody(data);
+  const bodyError = checkCommentBody(content);
+  if (bodyError) return { ok: false, status: 400, error: bodyError, fieldErrors: { body: bodyError } };
 
   const limit = await deps.rateLimit(`comment:${ctx.ipHash}`, COMMENT_LIMITS.perWindow, COMMENT_LIMITS.windowSec);
   if (!limit.ok) return { ok: false, status: 429, error: `Too many comments. Try again in ${Math.ceil(limit.retryAfterSec / 60)} min.` };
@@ -72,25 +108,28 @@ export async function createComment(input: unknown, ctx: { ip: string; ipHash: s
   const human = await deps.verifyCaptcha(deps.settings.captchaProvider, data.captchaToken, ctx.ip);
   if (!human) return { ok: false, status: 400, error: "Captcha verification failed. Please try again." };
 
-  const article = await deps.db.article.findFirst({
-    where: { id: data.articleId, status: { in: ["published", "scheduled"] }, publishedAt: { lte: new Date() } },
-    select: { id: true },
-  });
-  if (!article) return { ok: false, status: 404, error: "Article not found" };
+  const visible = { id: data.targetId, status: { in: ["published" as const, "scheduled" as const] }, publishedAt: { lte: new Date() } };
+  const target =
+    data.targetType === "article"
+      ? await deps.db.article.findFirst({ where: visible, select: { id: true } })
+      : await deps.db.blogPost.findFirst({ where: visible, select: { id: true } });
+  if (!target) return { ok: false, status: 404, error: "Post not found" };
+  const targetWhere = data.targetType === "article" ? { articleId: target.id } : { blogPostId: target.id };
 
   if (data.parentId) {
-    const parent = await deps.db.comment.findFirst({ where: { id: data.parentId, articleId: article.id }, select: { id: true, status: true } });
+    const parent = await deps.db.comment.findFirst({ where: { id: data.parentId, ...targetWhere }, select: { id: true, status: true } });
     if (!parent || parent.status === "pending") return { ok: false, status: 400, error: "You can't reply to this comment" };
   }
 
   const status = deps.settings.requireApproval ? "pending" : "visible";
   const created = await deps.db.comment.create({
     data: {
-      articleId: article.id,
+      ...targetWhere,
       parentId: data.parentId ?? null,
       authorName: cleanText(data.authorName).replace(/\n/g, " "),
       authorEmail: data.authorEmail || null,
-      body,
+      body: content.body,
+      bodyHtml: content.bodyHtml,
       status,
       ipHash: ctx.ipHash,
     },

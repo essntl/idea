@@ -2,7 +2,7 @@
 
 **idea** (ιδέα) — a minimal, black-and-white personal site:
 
-- **Blog** (`/blog`): a diary-style list of short posts.
+- **Blog** (`/blog`): a diary-style list of short posts, with comments.
 - **Articles** (`/articles`): long-form writing with categories, custom slugs, preview images, a table of contents and threaded comments.
 - **About** (`/about`): a single page you edit from the admin.
 - **Admin** (`/admin`): a Notion-like editor (slash commands, selection toolbar, drag & drop images, markdown import/export), comment moderation, media library, categories & tags, settings, and backups.

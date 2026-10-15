@@ -22,9 +22,9 @@ export function TagsInput({ value, onChange, suggestions }: { value: string[]; o
       {value.length > 0 && (
         <ul className="mb-2 flex flex-wrap gap-1.5">
           {value.map((t) => (
-            <li key={t} className="inline-flex items-center gap-1 rounded-full border border-line-strong py-0.5 pr-1 pl-2.5 text-sm">
+            <li key={t} className="inline-flex items-center gap-1 rounded-full bg-surface-2 py-0.5 pr-1 pl-3 text-sm">
               {t}
-              <button type="button" className="inline-flex size-7 items-center justify-center rounded-full hover:bg-surface" onClick={() => onChange(value.filter((x) => x !== t))} aria-label={`Remove tag ${t}`}>
+              <button type="button" className="inline-flex size-7 items-center justify-center rounded-full text-muted hover:bg-line-strong/50 hover:text-fg" onClick={() => onChange(value.filter((x) => x !== t))} aria-label={`Remove tag ${t}`}>
                 <CloseIcon width={12} height={12} />
               </button>
             </li>

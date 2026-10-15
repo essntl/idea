@@ -6,10 +6,14 @@ import type { JSONContent } from "@tiptap/core";
 import { Placeholder } from "@tiptap/extensions";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { schemaExtensions, TEXT_COLORS } from "@/lib/content/extensions";
+import { toggleCodeBlock } from "@/lib/content/editor-commands";
 import { EditorCodeBlock, EditorEmbed, EditorFigure } from "./node-views";
-import { createSlashCommand, type SlashActions } from "./slash-command";
+import { createSlashCommand, SLASH_ITEMS, type SlashActions } from "./slash-command";
+import { Sheet } from "@/components/ui/sheet";
+import { PlusIcon } from "@/components/ui/icons";
 import { isImageFile, pickFiles, uploadImages, type MediaItem } from "./upload";
 import { MediaPicker } from "../media-picker";
+import { Select } from "@/components/ui/select";
 
 type Props = {
   content: JSONContent;
@@ -109,8 +113,9 @@ export function RichEditor({ content, onChange, placeholder = "Write something, 
       {editor && <Toolbar editor={editor} onImage={actions.pickImage} onLibrary={() => setPickerOpen(true)} />}
       {editor && <SelectionMenu editor={editor} />}
       <EditorContent editor={editor} />
+      {editor && <MobileInsert editor={editor} actions={actions} />}
       {status && (
-        <p role="status" className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md rounded border border-line-strong bg-bg px-4 py-3 text-sm sm:inset-x-auto sm:right-6">
+        <p role="status" className="floating fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md animate-sheet-in px-4 py-3 text-sm sm:inset-x-auto sm:right-6">
           {status}
           <button type="button" className="ml-3 underline" onClick={() => setStatus(null)}>
             Dismiss
@@ -126,6 +131,47 @@ export function RichEditor({ content, onChange, placeholder = "Write something, 
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Phones have no fixed toolbar: text is formatted via the selection menu, and blocks are inserted
+ * from this "+" button (same list as the "/" command).
+ */
+function MobileInsert({ editor, actions }: { editor: Editor; actions: SlashActions }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="Insert block"
+        onPointerDown={(e) => e.preventDefault()}
+        onClick={() => setOpen(true)}
+        className={`fixed right-4 z-30 ${process.env.NODE_ENV === "development" ? "bottom-20" : "bottom-[max(1rem,env(safe-area-inset-bottom))]"} flex size-12 items-center justify-center rounded-full bg-fg text-bg shadow-[var(--shadow-float)] md:hidden`}
+      >
+        <PlusIcon width={22} height={22} />
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title="Insert">
+        <ul className="-mx-2 grid grid-cols-2 gap-1">
+          {SLASH_ITEMS.map((item) => (
+            <li key={item.title}>
+              <button
+                type="button"
+                className="flex w-full flex-col items-start rounded-[var(--radius-md)] px-3 py-2.5 text-left hover:bg-surface-2"
+                onClick={() => {
+                  setOpen(false);
+                  const pos = editor.state.selection.from;
+                  item.run(editor, { from: pos, to: pos }, actions);
+                }}
+              >
+                <span className="text-sm font-medium">{item.title}</span>
+                <span className="text-xs text-muted">{item.hint}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Sheet>
+    </>
   );
 }
 
@@ -176,7 +222,7 @@ function Btn({ label, active, disabled, onClick, children }: { label: string; ac
       disabled={disabled}
       onMouseDown={(e) => e.preventDefault()}
       onClick={onClick}
-      className={`inline-flex size-10 shrink-0 items-center justify-center rounded text-sm disabled:opacity-30 ${active ? "bg-fg text-bg" : "hover:bg-surface"}`}
+      className={`inline-flex size-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-sm disabled:opacity-30 ${active ? "bg-fg text-bg" : "text-muted hover:bg-surface-2 hover:text-fg"}`}
     >
       {children}
     </button>
@@ -217,26 +263,27 @@ function Toolbar({ editor, onImage, onLibrary }: { editor: Editor; onImage: () =
   const c = () => editor.chain().focus();
   const block = s.h1 ? "h1" : s.h2 ? "h2" : s.h3 ? "h3" : "p";
   return (
-    <div className="sticky top-14 z-30 -mx-4 border-y border-line bg-bg px-2 sm:mx-0 sm:rounded-t sm:border-x lg:top-0" role="toolbar" aria-label="Formatting">
-      <div className="flex items-center overflow-x-auto py-1 [scrollbar-width:none] md:flex-wrap md:overflow-visible">
+    <div className="sticky top-[7.5rem] z-20 hidden rounded-[var(--radius-lg)] border border-line bg-bg/90 px-1.5 backdrop-blur-md md:block lg:top-[4.75rem]" role="toolbar" aria-label="Formatting">
+      <div className="flex flex-wrap items-center py-1">
         <Btn label="Undo" disabled={!s.canUndo} onClick={() => c().undo().run()}>↶</Btn>
         <Btn label="Redo" disabled={!s.canRedo} onClick={() => c().redo().run()}>↷</Btn>
         <Sep />
-        <select
+        <Select
           aria-label="Block type"
-          className="h-10 shrink-0 rounded bg-transparent px-1 text-sm hover:bg-surface"
+          preserveFocus
+          className="h-9 min-h-9 w-32 shrink-0 text-sm text-muted hover:bg-surface-2 hover:text-fg"
           value={block}
-          onChange={(e) => {
-            const v = e.target.value;
+          onChange={(v) => {
             if (v === "p") c().setParagraph().run();
             else c().setHeading({ level: Number(v[1]) as 1 | 2 | 3 }).run();
           }}
-        >
-          <option value="p">Paragraph</option>
-          <option value="h1">Heading 1</option>
-          <option value="h2">Heading 2</option>
-          <option value="h3">Heading 3</option>
-        </select>
+          options={[
+            { value: "p", label: "Paragraph" },
+            { value: "h1", label: "Heading 1" },
+            { value: "h2", label: "Heading 2" },
+            { value: "h3", label: "Heading 3" },
+          ]}
+        />
         <Sep />
         <Btn label="Bold" active={s.bold} onClick={() => c().toggleBold().run()}><b>B</b></Btn>
         <Btn label="Italic" active={s.italic} onClick={() => c().toggleItalic().run()}><i>I</i></Btn>
@@ -244,13 +291,13 @@ function Toolbar({ editor, onImage, onLibrary }: { editor: Editor; onImage: () =
         <Btn label="Strikethrough" active={s.strike} onClick={() => c().toggleStrike().run()}><s>S</s></Btn>
         <Btn label="Inline code" active={s.code} onClick={() => c().toggleCode().run()}><code>{"<>"}</code></Btn>
         <Btn label="Link" active={s.link} onClick={() => setLink(editor)}>🔗︎</Btn>
-        <Btn label="Highlight" active={s.highlight} onClick={() => c().toggleHighlight().run()}><mark className="bg-line px-0.5 text-fg">H</mark></Btn>
+        <Btn label="Highlight" active={s.highlight} onClick={() => c().toggleHighlight().run()}><mark className="rounded-sm bg-surface-2 px-0.5 text-fg">H</mark></Btn>
         <Sep />
         <Btn label="Bulleted list" active={s.bullet} onClick={() => c().toggleBulletList().run()}>•≡</Btn>
         <Btn label="Numbered list" active={s.ordered} onClick={() => c().toggleOrderedList().run()}>1.</Btn>
         <Btn label="To-do list" active={s.task} onClick={() => c().toggleTaskList().run()}>☑︎</Btn>
         <Btn label="Quote" active={s.quote} onClick={() => c().toggleBlockquote().run()}>❝</Btn>
-        <Btn label="Code block" active={s.codeBlock} onClick={() => c().toggleCodeBlock().run()}>{"{}"}</Btn>
+        <Btn label="Code block" active={s.codeBlock} onClick={() => toggleCodeBlock(editor)}>{"{}"}</Btn>
         <Btn label="Divider" onClick={() => c().setHorizontalRule().run()}>—</Btn>
         <Sep />
         <Btn label="Upload image" onClick={onImage}>▣</Btn>
@@ -285,17 +332,19 @@ function SelectionMenu({ editor }: { editor: Editor }) {
         return state.doc.textBetween(from, to).trim().length > 0;
       }}
     >
-      <div className="flex max-w-[calc(100vw-2rem)] items-center overflow-x-auto rounded border border-line-strong bg-bg p-0.5 text-fg">
+      <div className="floating flex w-max max-w-[calc(100vw-1.5rem)] flex-wrap items-center justify-center p-1 text-fg">
         <Btn label="Bold" active={s.bold} onClick={() => c().toggleBold().run()}><b>B</b></Btn>
         <Btn label="Italic" active={s.italic} onClick={() => c().toggleItalic().run()}><i>I</i></Btn>
         <Btn label="Underline" active={s.underline} onClick={() => c().toggleUnderline().run()}><u>U</u></Btn>
         <Btn label="Strikethrough" active={s.strike} onClick={() => c().toggleStrike().run()}><s>S</s></Btn>
         <Btn label="Inline code" active={s.code} onClick={() => c().toggleCode().run()}><code>{"<>"}</code></Btn>
         <Btn label="Link" active={s.link} onClick={() => setLink(editor)}>🔗︎</Btn>
-        <Btn label="Highlight" active={s.highlight} onClick={() => c().toggleHighlight().run()}><mark className="bg-line px-0.5 text-fg">H</mark></Btn>
+        <Btn label="Highlight" active={s.highlight} onClick={() => c().toggleHighlight().run()}><mark className="rounded-sm bg-surface-2 px-0.5 text-fg">H</mark></Btn>
         <Sep />
         <Btn label="Heading 2" active={s.h2} onClick={() => c().toggleHeading({ level: 2 }).run()}>H2</Btn>
         <Btn label="Heading 3" active={s.h3} onClick={() => c().toggleHeading({ level: 3 }).run()}>H3</Btn>
+        <Btn label="Bulleted list" active={s.bullet} onClick={() => c().toggleBulletList().run()}>•≡</Btn>
+        <Btn label="Quote" active={s.quote} onClick={() => c().toggleBlockquote().run()}>❝</Btn>
         <Sep />
         {TEXT_COLORS.map((col) => (
           <Btn

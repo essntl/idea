@@ -10,9 +10,13 @@ import { TagsInput } from "./tags-input";
 import { MediaPicker } from "./media-picker";
 import { ImageCropper } from "./image-cropper";
 import { api } from "./api";
+import { Select } from "@/components/ui/select";
 import { pickFiles, uploadImages, type MediaItem } from "./editor/upload";
 import { slugify } from "@/lib/slug";
-import { ArrowLeft, CloseIcon } from "@/components/ui/icons";
+import { publishPreviewDraft, type PreviewDraft } from "@/lib/admin/preview-draft";
+import { ArrowLeft, EyeIcon, SlidersIcon } from "@/components/ui/icons";
+import { Menu, type MenuItem } from "@/components/ui/menu";
+import { Sheet } from "@/components/ui/sheet";
 
 export type EditorKind = "blog" | "article" | "page";
 
@@ -30,6 +34,8 @@ export type EditorInitial = {
   seoTitle: string;
   seoDescription: string;
   publicUrl: string | null;
+  /** When the live post has autosaved, unpublished changes: when they were last saved. */
+  pendingDraftAt: string | null;
 };
 
 type Props = {
@@ -39,7 +45,7 @@ type Props = {
   categories?: { id: string; name: string }[];
 };
 
-type State = Omit<EditorInitial, "id" | "publicUrl">;
+type State = Omit<EditorInitial, "id" | "publicUrl" | "pendingDraftAt">;
 
 /** ISO → value for <input type="datetime-local"> in the browser's timezone. */
 function toLocalInput(iso: string | null) {
@@ -60,6 +66,7 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
     previewImage: initial.previewImage, seoTitle: initial.seoTitle, seoDescription: initial.seoDescription,
   }));
   const [savedStatus, setSavedStatus] = useState(initial.status);
+  const [pendingAt, setPendingAt] = useState<string | null>(initial.pendingDraftAt);
   const [publicUrl, setPublicUrl] = useState(initial.publicUrl);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -126,6 +133,36 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
     [kind],
   );
 
+  // Live content (published/scheduled posts, the About page) autosaves into a pending draft;
+  // visitors keep seeing the published version until "Publish changes".
+  const isLive = kind === "page" || savedStatus !== "draft";
+  const draftId = kind === "page" ? "about" : id;
+
+  const saveDraft = useCallback(
+    async (opts: { auto?: boolean } = {}) => {
+      const s = stateRef.current;
+      const v = version.current;
+      setSaving(true);
+      if (!opts.auto) setMessage(null);
+      try {
+        const { status: _omit, ...fields } = payload(s) as Record<string, unknown>;
+        void _omit;
+        const res = await api<{ draftUpdatedAt: string }>(`/api/admin/drafts/${kind}/${draftId}`, { method: "PUT", json: fields });
+        if (version.current === v) setDirty(false);
+        setSavedAt(new Date());
+        setPendingAt(res.draftUpdatedAt);
+        if (!opts.auto) setMessage({ kind: "ok", text: "Changes saved. They go live when you publish them." });
+        return true;
+      } catch (e) {
+        setMessage({ kind: "error", text: `Autosave failed: ${(e as Error).message}` });
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [kind, draftId, payload],
+  );
+
   const save = useCallback(
     async (opts: { status?: State["status"]; auto?: boolean } = {}) => {
       const s = stateRef.current;
@@ -139,12 +176,16 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
         savedVersion.current = v;
         if (version.current === v) setDirty(false);
         setSavedAt(new Date());
+        setPendingAt(null); // a full save publishes (or keeps as draft) everything, so nothing is pending
         if (res.status) {
           setSavedStatus(res.status);
           setState((cur) => ({ ...cur, status: res.status!, publishedAt: res.publishedAt ?? null, slug: res.slug ?? cur.slug }));
           if (kind !== "page" && res.slug) setPublicUrl(`/${kind === "blog" ? "blog" : "articles"}/${res.slug}`);
         }
-        if (!opts.auto) setMessage({ kind: "ok", text: status === "draft" ? "Draft saved" : status === "scheduled" ? "Scheduled" : "Published" });
+        if (!opts.auto) {
+          const text = kind === "page" ? "Published" : status === "draft" ? (isLive ? "Unpublished — now a draft" : "Draft saved") : status === "scheduled" ? "Scheduled" : isLive ? "Changes published" : "Published";
+          setMessage({ kind: "ok", text });
+        }
         router.refresh();
         return true;
       } catch (e) {
@@ -154,15 +195,30 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
         setSaving(false);
       }
     },
-    [id, kind, payload, router],
+    [id, kind, payload, router, isLive],
   );
 
-  // Autosave drafts (published content is only updated on an explicit save).
+  /** Save without publishing: drafts save in place, live content saves its pending changes. */
+  const saveQuietly = useCallback((auto: boolean) => (isLive ? saveDraft({ auto }) : save({ auto })), [isLive, save, saveDraft]);
+
+  // Autosave everything shortly after you stop typing.
   useEffect(() => {
-    if (!dirty || savedStatus !== "draft" || kind === "page") return;
-    const t = setTimeout(() => void save({ auto: true }), 1500);
+    if (!dirty || saving) return;
+    const t = setTimeout(() => void saveQuietly(true), 1200);
     return () => clearTimeout(t);
-  }, [dirty, state, savedStatus, kind, save]);
+  }, [dirty, state, saving, saveQuietly]);
+
+  async function discardChanges() {
+    if (!confirm("Discard your unpublished changes and go back to the published version?")) return;
+    try {
+      await api(`/api/admin/drafts/${kind}/${draftId}`, { method: "DELETE" });
+      setDirty(false);
+      // Reload so the editor starts again from the published version.
+      window.location.reload();
+    } catch (e) {
+      setMessage({ kind: "error", text: (e as Error).message });
+    }
+  }
 
   // Warn before leaving with unsaved changes (tab close and in-app links).
   useEffect(() => {
@@ -191,18 +247,43 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        void save();
+        void saveQuietly(false);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [save]);
+  }, [saveQuietly]);
 
-  async function preview() {
-    if (dirty && savedStatus === "draft") await save({ auto: true });
-    else if (dirty) setMessage({ kind: "ok", text: "Preview shows the last saved version." });
-    window.open(kind === "page" ? "/about" : `/admin/preview/${kind}/${id}`, "_blank");
+  // Preview shows the editor's current state (saved or not); see components/admin/preview-view.tsx.
+  const [previewing, setPreviewing] = useState(false);
+  const previewId = kind === "page" ? "about" : id;
+
+  const draftForPreview = useCallback(
+    (s: State): PreviewDraft => ({
+      title: s.title,
+      description: s.description,
+      contentJson: s.contentJson,
+      tags: s.tags,
+      publishedAt: s.publishedAt,
+      categoryId: s.categoryId,
+      previewImage: s.previewImage ? { url: s.previewImage.url, width: s.previewImage.width, height: s.previewImage.height, alt: s.previewImage.alt } : null,
+      at: Date.now(),
+    }),
+    [],
+  );
+
+  function preview() {
+    publishPreviewDraft(kind, previewId, draftForPreview(stateRef.current));
+    setPreviewing(true);
+    window.open(`/admin/preview/${kind}/${previewId}?live=1`, `preview-${kind}-${previewId}`);
   }
+
+  // Keep an open preview in sync while editing.
+  useEffect(() => {
+    if (!previewing) return;
+    const t = setTimeout(() => publishPreviewDraft(kind, previewId, draftForPreview(state)), 300);
+    return () => clearTimeout(t);
+  }, [previewing, state, kind, previewId, draftForPreview]);
 
   async function importMarkdown() {
     const [file] = await pickFiles(".md,.markdown,text/markdown,text/plain", false);
@@ -284,9 +365,29 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
 
   const onContentChange = useCallback((doc: JSONContent) => update("contentJson", doc), [update]);
 
-  const isLive = savedStatus !== "draft";
-  const saveLabel = kind === "page" ? "Save" : state.status === "draft" ? (isLive ? "Unpublish" : "Save draft") : isLive ? "Update" : state.status === "scheduled" ? "Schedule" : "Publish";
-  const statusText = saving ? "Saving…" : dirty ? "Unsaved changes" : savedAt ? `Saved ${savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : isLive ? "Published" : "Draft";
+  const hasChanges = dirty || !!pendingAt;
+  const time = (d: Date) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const lastSaved = savedAt ?? (pendingAt ? new Date(pendingAt) : null);
+  // Primary action: publish for drafts, "Publish changes" for live content with pending edits.
+  const primary =
+    kind !== "page" && state.status === "draft"
+      ? { label: isLive ? "Unpublish" : "Save draft", disabled: false }
+      : !isLive
+        ? { label: state.status === "scheduled" ? "Schedule" : "Publish", disabled: false }
+        : hasChanges || state.status !== savedStatus
+          ? { label: state.status === "scheduled" && savedStatus !== "scheduled" ? "Schedule" : "Publish changes", disabled: false }
+          : { label: "Published", disabled: true };
+  // Phones only have room for a word or two.
+  const shortStatus = saving ? "Saving…" : dirty ? "Editing…" : isLive ? (pendingAt ? "Unpublished edits" : "Live") : "Draft";
+  const statusText = saving
+    ? "Saving…"
+    : dirty
+      ? "Editing…"
+      : isLive
+        ? pendingAt
+          ? `Unpublished changes · saved ${lastSaved ? time(lastSaved) : ""}`
+          : "Published · up to date"
+        : `Draft${lastSaved ? ` · saved ${time(lastSaved)}` : ""}`;
 
   const label = "mb-1 block text-sm font-medium";
   const sidebar = (
@@ -295,11 +396,17 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
         <>
           <div>
             <label htmlFor="status" className={label}>Status</label>
-            <select id="status" className="field" value={state.status} onChange={(e) => update("status", e.target.value as State["status"])}>
-              <option value="draft">Draft</option>
-              <option value="published">Published</option>
-              {kind === "article" && <option value="scheduled">Scheduled</option>}
-            </select>
+            <Select
+              id="status"
+              className="field"
+              value={state.status}
+              onChange={(v) => update("status", v as State["status"])}
+              options={[
+                { value: "draft", label: "Draft", hint: "Only visible to you" },
+                { value: "published", label: "Published", hint: "Live on the site" },
+                ...(kind === "article" ? [{ value: "scheduled", label: "Scheduled", hint: "Goes live at the publish date" }] : []),
+              ]}
+            />
           </div>
           <div>
             <label htmlFor="publishedAt" className={label}>{state.status === "scheduled" ? "Publish at" : "Publish date"}</label>
@@ -361,12 +468,13 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
           <div>
             <label htmlFor="category" className={label}>Category</label>
             <div className="flex gap-2">
-              <select id="category" className="field" value={state.categoryId ?? ""} onChange={(e) => update("categoryId", e.target.value || null)}>
-                <option value="">— None —</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <Select
+                id="category"
+                className="field min-w-0 flex-1"
+                value={state.categoryId ?? ""}
+                onChange={(v) => update("categoryId", v || null)}
+                options={[{ value: "", label: "None" }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
+              />
               <button type="button" className="btn btn-ghost" onClick={newCategory} aria-label="New category">New</button>
             </div>
           </div>
@@ -374,7 +482,7 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
             <span className={label}>Preview image</span>
             {state.previewImage ? (
               <div>
-                <div className="relative aspect-[16/9] overflow-hidden border border-line bg-surface">
+                <div className="relative aspect-[16/9] overflow-hidden rounded-[var(--radius-lg)] bg-surface">
                   {/* eslint-disable-next-line @next/next/no-img-element -- admin preview */}
                   <img src={`${state.previewImage.url}?w=640`} alt={state.previewImage.alt} className="size-full object-cover" />
                 </div>
@@ -409,43 +517,70 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
           </details>
         </>
       )}
-      {kind !== "page" && (
-        <div className="space-y-2 border-t border-line pt-4">
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn btn-ghost" onClick={importMarkdown}>Import .md</button>
-            <a className="btn btn-ghost" href={`/api/admin/export/markdown?type=${kind}&id=${id}`} download>Export .md</a>
-          </div>
-          <button type="button" className="btn btn-ghost w-full" onClick={remove}>Delete {kind === "blog" ? "post" : "article"}</button>
-        </div>
-      )}
     </div>
   );
 
+  const menuItems: MenuItem[] = [
+    ...(isLive && pendingAt ? [{ label: "Discard unpublished changes", onSelect: discardChanges } as MenuItem, "separator" as const] : []),
+    ...(publicUrl && isLive ? [{ label: "View on site", href: publicUrl, newTab: true } as MenuItem] : []),
+    { label: "Undo", onSelect: () => editorRef.current?.chain().focus().undo().run() },
+    { label: "Redo", onSelect: () => editorRef.current?.chain().focus().redo().run() },
+    ...(kind !== "page"
+      ? ([
+          "separator",
+          { label: "Import markdown…", onSelect: importMarkdown },
+          { label: "Export as markdown", href: `/api/admin/export/markdown?type=${kind}&id=${id}` },
+          "separator",
+          { label: `Delete ${kind === "blog" ? "post" : "article"}`, destructive: true, onSelect: remove },
+        ] as MenuItem[])
+      : []),
+  ];
+
   return (
     <div className="mx-auto max-w-6xl">
-      {/* Top bar */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link href={LIST_URL[kind]} className="tap justify-center text-muted hover:text-fg" aria-label="Back">
-            <ArrowLeft />
-          </Link>
-          <span className="text-sm text-muted" role="status" aria-live="polite">{statusText}</span>
-          {publicUrl && isLive && (
-            <a href={publicUrl} target="_blank" className="hidden text-sm underline sm:inline" rel="noreferrer">View ↗</a>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className="btn btn-ghost" onClick={preview}>Preview</button>
+      {/* Top bar: back + status on the left, one joined control group on the right. */}
+      <div className="sticky top-14 z-30 -mx-4 mb-5 flex items-center gap-2 border-b border-line bg-bg/90 px-4 py-2 backdrop-blur-md sm:mx-0 sm:rounded-[var(--radius-lg)] sm:border sm:px-2 lg:top-3">
+        <Link href={LIST_URL[kind]} className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-muted hover:bg-surface-2 hover:text-fg" aria-label="Back">
+          <ArrowLeft width={18} height={18} />
+        </Link>
+        <span className="min-w-0 flex-1 truncate text-sm text-muted" role="status" aria-live="polite" title={statusText}>
+          <span className="sm:hidden">{shortStatus}</span>
+          <span className="hidden sm:inline">{statusText}</span>
+        </span>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button type="button" onClick={preview} title="Preview" aria-label="Preview" className="flex size-10 items-center justify-center rounded-[var(--radius-md)] text-muted hover:bg-surface-2 hover:text-fg">
+            <EyeIcon width={19} height={19} />
+          </button>
           {kind !== "page" && (
-            <button type="button" className="btn btn-ghost lg:hidden" onClick={() => setSheetOpen(true)} aria-expanded={sheetOpen} aria-controls="post-settings">Settings</button>
+            <button
+              type="button"
+              onClick={() => setSheetOpen(true)}
+              aria-expanded={sheetOpen}
+              title="Post settings"
+              aria-label="Post settings"
+              className="flex size-10 items-center justify-center rounded-[var(--radius-md)] text-muted hover:bg-surface-2 hover:text-fg lg:hidden"
+            >
+              <SlidersIcon width={19} height={19} />
+            </button>
           )}
-          <button type="button" className="btn" onClick={() => void save()} disabled={saving || (kind === "article" && slugCheck?.ok === false)}>
-            {saveLabel}
+          <Menu items={menuItems} label="More editor actions" />
+          <button
+            type="button"
+            className="btn btn-sm ml-1.5 min-h-10 px-4"
+            onClick={() => void save()}
+            disabled={saving || primary.disabled || (kind === "article" && slugCheck?.ok === false)}
+          >
+            {primary.label}
           </button>
         </div>
       </div>
+      {isLive && pendingAt && (
+        <p className="mb-4 text-sm text-muted" role="note">
+          Editing unpublished changes. Visitors see the published version until you publish.
+        </p>
+      )}
       {message && (
-        <p role={message.kind === "error" ? "alert" : "status"} className={`mb-4 rounded border px-3 py-2 text-sm ${message.kind === "error" ? "border-fg font-medium" : "border-line text-muted"}`}>
+        <p role={message.kind === "error" ? "alert" : "status"} className={`mb-4 rounded-[var(--radius-md)] border px-3 py-2 text-sm ${message.kind === "error" ? "border-fg font-medium" : "border-line text-muted"}`}>
           {message.text}
         </p>
       )}
@@ -476,20 +611,9 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
             <aside className="hidden lg:block" aria-label="Post settings">
               <div className="sticky top-6 max-h-[calc(100dvh-3rem)] overflow-y-auto pb-6">{sidebar}</div>
             </aside>
-            {sheetOpen && (
-              <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Post settings" id="post-settings">
-                <button type="button" className="absolute inset-0 bg-black/50" aria-label="Close settings" onClick={() => setSheetOpen(false)} />
-                <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] animate-menu-in overflow-y-auto rounded-t-lg border-t border-line-strong bg-bg px-4 pt-2 pb-8">
-                  <div className="sticky top-0 -mx-4 mb-4 flex items-center justify-between border-b border-line bg-bg px-4 py-2">
-                    <h2 className="font-semibold">Settings</h2>
-                    <button type="button" className="tap justify-center" onClick={() => setSheetOpen(false)} aria-label="Close">
-                      <CloseIcon />
-                    </button>
-                  </div>
-                  {sidebar}
-                </div>
-              </div>
-            )}
+            <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={kind === "blog" ? "Post settings" : "Article settings"}>
+              <div className="pt-1">{sidebar}</div>
+            </Sheet>
           </>
         )}
       </div>

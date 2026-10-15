@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "./api";
 import { LocalTime } from "./local-time";
+import { ActionBar } from "./action-bar";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Menu } from "@/components/ui/menu";
+import { ChevronRight } from "@/components/ui/icons";
 
 export type ContentRow = {
   id: string;
@@ -16,9 +20,13 @@ export type ContentRow = {
   category?: string | null;
   comments?: number;
   url: string | null;
+  /** Live post with autosaved, unpublished changes. */
+  pending?: boolean;
 };
 
-/** Responsive list: a table on wide screens, stacked rows on phones. Selection enables bulk actions. */
+const STATUS: Record<ContentRow["status"], string> = { draft: "Draft", published: "Published", scheduled: "Scheduled" };
+
+/** Card list of posts. Tap a row to edit; checkboxes select for bulk actions in a floating bar. */
 export function ContentTable({ type, rows }: { type: "blog" | "article"; rows: ContentRow[] }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -51,58 +59,70 @@ export function ContentTable({ type, rows }: { type: "blog" | "article"; rows: C
     }
   }
 
-  if (!rows.length) return <p className="border-y border-line py-10 text-center text-muted">Nothing here yet.</p>;
+  if (!rows.length) return <p className="rounded-[var(--radius-lg)] border border-dashed border-line-strong py-10 text-center text-muted">Nothing here yet.</p>;
 
   return (
-    <div>
-      <div className="mb-3 flex min-h-11 flex-wrap items-center gap-2 text-sm">
-        <label className="tap gap-2">
-          <input type="checkbox" className="size-4 accent-current" checked={allSelected} onChange={(e) => setSelected(e.target.checked ? new Set(rows.map((r) => r.id)) : new Set())} />
-          Select all
-        </label>
-        {selected.size > 0 && (
-          <>
-            <span className="text-muted">{selected.size} selected</span>
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => bulk("publish")}>Publish</button>
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => bulk("unpublish")}>Unpublish</button>
-            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => bulk("delete")}>Delete</button>
-          </>
-        )}
-        {error && <span role="alert" className="font-medium">{error}</span>}
+    <div className="pb-20">
+      <div className="mb-1 flex items-center justify-between pl-[13px]">
+        <Checkbox
+          checked={allSelected}
+          indeterminate={selected.size > 0 && !allSelected}
+          onChange={(on) => setSelected(on ? new Set(rows.map((r) => r.id)) : new Set())}
+          label={<span className="text-muted">{selected.size ? `${selected.size} selected` : "Select all"}</span>}
+        />
+        <span className="pr-1 text-xs text-subtle">{rows.length} shown</span>
       </div>
 
-      <div className="hidden grid-cols-[2rem_minmax(0,1fr)_7rem_8rem_8rem] gap-4 border-b border-line pb-2 text-xs font-medium tracking-wide text-muted uppercase md:grid">
-        <span />
-        <span>Title</span>
-        <span>Status</span>
-        <span>{type === "article" ? "Category" : "Tags"}</span>
-        <span>Date</span>
-      </div>
-      <ul className="divide-y divide-line border-b border-line">
-        {rows.map((r) => (
-          <li key={r.id} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-x-4 gap-y-1 py-3 md:grid-cols-[2rem_minmax(0,1fr)_7rem_8rem_8rem] md:items-center">
-            <input type="checkbox" className="mt-1 size-4 accent-current md:mt-0" checked={selected.has(r.id)} onChange={(e) => toggle(r.id, e.target.checked)} aria-label={`Select ${r.title || "untitled"}`} />
-            <div className="min-w-0">
-              <Link href={`${editBase}/${r.id}`} className="block truncate font-medium hover:underline">
-                {r.title || <span className="text-muted italic">Untitled</span>}
+      <ul className="card divide-y divide-line overflow-hidden">
+        {rows.map((r) => {
+          const meta = [
+            type === "article" ? r.category : r.tags.slice(0, 3).join(", "),
+            typeof r.comments === "number" && r.comments > 0 ? `${r.comments} comment${r.comments === 1 ? "" : "s"}` : null,
+          ].filter(Boolean);
+          return (
+            <li key={r.id} className={`relative flex items-center gap-0.5 pr-2 pl-1 transition-colors hover:bg-surface ${selected.has(r.id) ? "bg-surface" : ""}`}>
+              <Checkbox checked={selected.has(r.id)} onChange={(on) => toggle(r.id, on)} aria-label={`Select ${r.title || "untitled"}`} className="relative z-10 shrink-0 justify-center" />
+              <Link href={`${editBase}/${r.id}`} className="flex min-w-0 flex-1 items-center gap-3 py-3 after:absolute after:inset-0">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{r.title || <span className="text-muted italic">Untitled</span>}</span>
+                  <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
+                    <span className={`rounded-full px-2 py-px text-xs ${r.status === "draft" ? "bg-surface-2" : "bg-fg text-bg"}`}>{STATUS[r.status]}</span>
+                    {r.pending && (
+                      <span className="rounded-full border border-line-strong px-2 py-px text-xs" title="Autosaved changes not yet published">
+                        Unpublished edits
+                      </span>
+                    )}
+                    <span>{r.date ? <LocalTime iso={r.date} dateOnly /> : <>Edited <LocalTime iso={r.updatedAt} dateOnly /></>}</span>
+                    {meta.map((m) => (
+                      <span key={m} className="hidden truncate sm:inline">
+                        · {m}
+                      </span>
+                    ))}
+                  </span>
+                </span>
+                <ChevronRight width={16} height={16} className="shrink-0 text-subtle" />
               </Link>
-              <div className="flex flex-wrap gap-x-3 text-xs text-muted">
-                {r.url && r.status !== "draft" && (
-                  <a href={r.url} target="_blank" className="hover:underline" rel="noreferrer">{r.url}</a>
-                )}
-                {typeof r.comments === "number" && r.comments > 0 && <span>{r.comments} comments</span>}
-              </div>
-            </div>
-            <div className="col-start-2 flex flex-wrap gap-x-3 text-sm text-muted md:contents">
-              <span className={r.status === "draft" ? "" : "text-fg"}>
-                {r.status === "draft" ? "Draft" : r.status === "scheduled" ? "Scheduled" : "Published"}
-              </span>
-              <span className="truncate">{type === "article" ? (r.category ?? "—") : r.tags.join(", ") || "—"}</span>
-              <span>{r.date ? <LocalTime iso={r.date} dateOnly /> : <>edited <LocalTime iso={r.updatedAt} dateOnly /></>}</span>
-            </div>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
+
+      {selected.size > 0 && (
+        <ActionBar label={error ?? `${selected.size} selected`}>
+          <button type="button" className="btn btn-sm" disabled={busy} onClick={() => bulk("publish")}>
+            Publish
+          </button>
+          <Menu
+            label="More bulk actions"
+            className="border border-line-strong"
+            items={[
+              { label: "Unpublish", onSelect: () => void bulk("unpublish"), disabled: busy },
+              "separator",
+              { label: "Delete", destructive: true, onSelect: () => void bulk("delete"), disabled: busy },
+            ]}
+          />
+        </ActionBar>
+      )}
     </div>
   );
 }

@@ -1,71 +1,55 @@
 import { notFound } from "next/navigation";
-import Image from "next/image";
 import { requireAdminPage } from "@/lib/guard";
 import { prisma } from "@/lib/db";
 import type { TocItem } from "@/lib/content/pipeline";
 import { SiteHeader } from "@/components/site/site-header";
 import { SiteFooter } from "@/components/site/site-footer";
-import { Prose } from "@/components/site/prose";
-import { TableOfContents } from "@/components/site/toc";
-import { TagList } from "@/components/site/tag-list";
-import { DateText } from "@/components/site/date-text";
+import { ImageLightbox } from "@/components/site/image-lightbox";
+import { PreviewView, type PreviewData } from "@/components/admin/preview-view";
 
 export const metadata = { title: "Preview", robots: { index: false, follow: false } };
 
-/** Renders a post exactly as the public page would, including drafts. Admin only. */
+/**
+ * Admin-only preview. Renders the saved version from the database; when opened from the editor,
+ * PreviewView replaces it with the editor's current (unsaved) state and keeps it in sync.
+ */
 export default async function PreviewPage({ params }: PageProps<"/admin/preview/[type]/[id]">) {
   await requireAdminPage();
   const { type, id } = await params;
-  const now = new Date().toISOString();
-  let body: React.ReactNode;
+  const categories = Object.fromEntries((await prisma.category.findMany({ select: { id: true, name: true } })).map((c) => [c.id, c.name]));
+  let data: PreviewData;
 
   if (type === "blog") {
-    const p = await prisma.blogPost.findUnique({ where: { id }, include: { tags: { select: { name: true, slug: true } } } });
+    const p = await prisma.blogPost.findUnique({ where: { id }, include: { tags: { select: { name: true } } } });
     if (!p) notFound();
-    body = (
-      <article className="container-prose">
-        <header className="mb-10">
-          <DateText iso={p.publishedAt?.toISOString() ?? now} className="text-sm text-muted" />
-          <h1 className="mt-2 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">{p.title || "Untitled"}</h1>
-          {p.description && <p className="mt-3 text-lg text-muted">{p.description}</p>}
-        </header>
-        <Prose html={p.contentHtml} />
-        <div className="mt-12 -ml-1.5 border-t border-line pt-6"><TagList tags={p.tags} base="/blog/tag" /></div>
-      </article>
-    );
+    data = {
+      kind: "blog", id, title: p.title, description: p.description, html: p.contentHtml, toc: [], readingTime: 1,
+      tags: p.tags.map((t) => t.name), publishedAt: p.publishedAt?.toISOString() ?? null, categoryId: null, previewImage: null,
+    };
   } else if (type === "article") {
-    const a = await prisma.article.findUnique({ where: { id }, include: { tags: { select: { name: true, slug: true } }, category: true, previewImage: true } });
+    const a = await prisma.article.findUnique({ where: { id }, include: { tags: { select: { name: true } }, previewImage: true } });
     if (!a) notFound();
-    body = (
-      <article>
-        <header className="container-prose">
-          <div className="flex flex-wrap gap-x-2 text-sm text-muted">
-            {a.category && <span>{a.category.name} ·</span>}
-            <DateText iso={a.publishedAt?.toISOString() ?? now} /> · <span>{a.readingTime} min read</span>
-          </div>
-          <h1 className="mt-3 text-3xl font-semibold leading-tight tracking-tight sm:text-[2.5rem]">{a.title || "Untitled"}</h1>
-          {a.excerpt && <p className="mt-4 text-lg text-muted">{a.excerpt}</p>}
-        </header>
-        {a.previewImage && (
-          <figure className="container-wide mt-8 sm:mt-10">
-            <Image src={`/media/${a.previewImage.path}`} alt={a.previewImage.alt} width={a.previewImage.width} height={a.previewImage.height} sizes="(min-width: 1024px) 976px, 100vw" priority className="mx-auto max-h-[70vh] w-full border border-line object-cover" />
-          </figure>
-        )}
-        <div className="container-prose mt-10">
-          <TableOfContents items={(a.toc as TocItem[]) ?? []} />
-          <Prose html={a.contentHtml} />
-          <div className="mt-12 -ml-1.5"><TagList tags={a.tags} base="/articles/tag" /></div>
-        </div>
-      </article>
-    );
+    data = {
+      kind: "article", id, title: a.title, description: a.excerpt, html: a.contentHtml, toc: (a.toc as TocItem[]) ?? [], readingTime: a.readingTime,
+      tags: a.tags.map((t) => t.name), publishedAt: a.publishedAt?.toISOString() ?? null, categoryId: a.categoryId,
+      previewImage: a.previewImage ? { url: `/media/${a.previewImage.path}`, width: a.previewImage.width, height: a.previewImage.height, alt: a.previewImage.alt } : null,
+    };
+  } else if (type === "page" && id === "about") {
+    const p = await prisma.page.findUnique({ where: { key: "about" } });
+    data = {
+      kind: "page", id, title: p?.title ?? "About", description: "", html: p?.contentHtml ?? "", toc: [], readingTime: 1,
+      tags: [], publishedAt: null, categoryId: null, previewImage: null,
+    };
   } else notFound();
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <div className="bg-fg py-2 text-center text-sm text-bg">Preview — not visible to visitors until published</div>
       <SiteHeader />
-      <main className="flex-1 pt-8 pb-16 sm:pt-12">{body}</main>
+      <main className="flex-1 pt-8 pb-16 sm:pt-12">
+        <PreviewView saved={data} categories={categories} />
+      </main>
       <SiteFooter />
+      <ImageLightbox />
     </div>
   );
 }

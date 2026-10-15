@@ -5,6 +5,7 @@ import { renderDocument } from "../content/pipeline";
 import { EMPTY_DOC } from "../content/extensions";
 import { slugify, uniqueSlug, validateSlug } from "../slug";
 import { HttpError } from "../errors";
+import { Prisma } from "@/generated/prisma/client";
 
 /* ------------------------------- validation ------------------------------ */
 
@@ -118,6 +119,7 @@ export async function updateBlogPost(id: string, raw: unknown) {
   return prisma.blogPost.update({
     where: { id },
     data: {
+      ...CLEAR_DRAFT,
       title: input.title,
       description: input.description,
       slug,
@@ -180,6 +182,7 @@ export async function updateArticle(id: string, raw: unknown) {
   const article = await prisma.article.update({
     where: { id },
     data: {
+      ...CLEAR_DRAFT,
       title: input.title,
       slug: input.slug,
       excerpt: input.excerpt,
@@ -213,6 +216,41 @@ export async function upsertRedirect(fromPath: string, toPath: string, statusCod
   await prisma.redirect.upsert({ where: { fromPath }, create: { fromPath, toPath, statusCode }, update: { toPath, statusCode } });
 }
 
+/* ----------------------------- pending changes ----------------------------- */
+
+/**
+ * Edits to live content are autosaved here instead of the published fields, so visitors keep seeing
+ * the live version until "Publish changes". Drafts are validated loosely (a half-written title or slug is fine).
+ */
+export const draftSchemas = {
+  blog: blogInputSchema.omit({ status: true }),
+  article: articleInputSchema.omit({ status: true }),
+  page: z.object({ title: z.string().trim().max(200), contentJson: docSchema }),
+} as const;
+
+export type DraftKind = keyof typeof draftSchemas;
+
+export const CLEAR_DRAFT = { draft: Prisma.DbNull, draftUpdatedAt: null };
+
+export async function savePendingDraft(kind: DraftKind, id: string, raw: unknown) {
+  const draft = draftSchemas[kind].parse(raw) as object;
+  const data = { draft, draftUpdatedAt: new Date() };
+  try {
+    if (kind === "blog") return await prisma.blogPost.update({ where: { id }, data, select: { draftUpdatedAt: true } });
+    if (kind === "article") return await prisma.article.update({ where: { id }, data, select: { draftUpdatedAt: true } });
+    return await prisma.page.update({ where: { key: id }, data, select: { draftUpdatedAt: true } });
+  } catch (err) {
+    if ((err as { code?: string }).code === "P2025") throw new HttpError(404, "Not found");
+    throw err;
+  }
+}
+
+export async function discardPendingDraft(kind: DraftKind, id: string) {
+  if (kind === "blog") await prisma.blogPost.updateMany({ where: { id }, data: CLEAR_DRAFT });
+  else if (kind === "article") await prisma.article.updateMany({ where: { id }, data: CLEAR_DRAFT });
+  else await prisma.page.updateMany({ where: { key: id }, data: CLEAR_DRAFT });
+}
+
 /* ---------------------------------- pages --------------------------------- */
 
 export const pageInputSchema = z.object({ title: z.string().trim().max(200), contentJson: docSchema });
@@ -223,7 +261,7 @@ export async function savePage(key: string, raw: unknown) {
   return prisma.page.upsert({
     where: { key },
     create: { key, title: input.title, contentJson: input.contentJson as object, contentHtml: rendered.html },
-    update: { title: input.title, contentJson: input.contentJson as object, contentHtml: rendered.html },
+    update: { ...CLEAR_DRAFT, title: input.title, contentJson: input.contentJson as object, contentHtml: rendered.html },
   });
 }
 

@@ -56,7 +56,7 @@ export function ImageCropper({ image, aspect = 16 / 9, onDone, onCancel }: { ima
   }
 
   return (
-    <dialog ref={dialog} onCancel={onCancel} className="m-auto w-[min(48rem,calc(100vw-2rem))] max-w-none rounded border border-line-strong bg-bg p-4 text-fg backdrop:bg-black/60">
+    <dialog ref={dialog} onCancel={onCancel} className="m-auto w-[min(48rem,calc(100vw-2rem))] max-w-none floating rounded-[var(--radius-xl)] p-5 text-fg backdrop:bg-black/60">
       <h2 className="mb-3 font-semibold">Crop preview image (16:9)</h2>
       <div ref={box} className="relative w-full touch-none select-none" style={{ aspectRatio: `${image.width} / ${image.height}` }}>
         {/* eslint-disable-next-line @next/next/no-img-element -- crop source */}

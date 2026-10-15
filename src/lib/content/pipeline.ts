@@ -62,7 +62,7 @@ export const contentSanitizeSchema: SanitizeSchema = {
 };
 
 let highlighterPromise: Promise<HighlighterGeneric<string, string>> | null = null;
-function getHighlighter() {
+export function getHighlighter() {
   highlighterPromise ??= createHighlighter({
     themes: [monoLight, monoDark],
     langs: CODE_LANGUAGES.filter((l) => l !== "plaintext"),

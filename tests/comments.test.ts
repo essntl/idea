@@ -7,6 +7,7 @@ function setup(overrides: Partial<CommentDeps["settings"]> = {}) {
   const deps: CommentDeps = {
     db: {
       article: { findFirst: vi.fn(async () => ({ id: "art1" })) },
+      blogPost: { findFirst: vi.fn(async ({ where }: { where: { id: string } }) => (where.id === "post1" ? { id: "post1" } : null)) },
       comment: {
         create,
         findFirst: vi.fn(async ({ where }: { where: { id: string } }) =>
@@ -22,7 +23,7 @@ function setup(overrides: Partial<CommentDeps["settings"]> = {}) {
 }
 
 const ctx = { ip: "1.2.3.4", ipHash: "hash" };
-const valid = { articleId: "art1", authorName: "Ann", authorEmail: "ann@example.com", body: "Nice post!", captchaToken: "valid-token" };
+const valid = { targetType: "article" as const, targetId: "art1", authorName: "Ann", authorEmail: "ann@example.com", body: "Nice post!", captchaToken: "valid-token" };
 const createdData = (create: ReturnType<typeof vi.fn>, i = 0) => (create.mock.calls[i] as unknown as [{ data: Record<string, unknown> }])[0].data;
 
 describe("createComment", () => {
@@ -92,6 +93,47 @@ describe("createComment", () => {
   it("stores text as plain text (HTML is never interpreted)", async () => {
     await createComment({ ...valid, body: "<script>alert(1)</script>\u0000hi" }, ctx, s.deps);
     expect(createdData(s.create).body).toBe("<script>alert(1)</script>hi");
+  });
+
+  it("stores comments on blog posts", async () => {
+    const r = await createComment({ ...valid, targetType: "blog", targetId: "post1" }, ctx, s.deps);
+    expect(r.ok).toBe(true);
+    const data = createdData(s.create);
+    expect(data.blogPostId).toBe("post1");
+    expect(data.articleId).toBeUndefined();
+  });
+
+  it("rejects unknown or unpublished blog posts", async () => {
+    const r = await createComment({ ...valid, targetType: "blog", targetId: "draft-post" }, ctx, s.deps);
+    expect(r).toMatchObject({ ok: false, status: 404 });
+  });
+
+  it("rejects an unknown target type", async () => {
+    expect((await createComment({ ...valid, targetType: "page" }, ctx, s.deps)).ok).toBe(false);
+  });
+
+  it("stores rich text as sanitized HTML plus plain text", async () => {
+    const bodyJson = {
+      type: "doc",
+      content: [{ type: "paragraph", content: [{ type: "text", text: "Nice ", marks: [] }, { type: "text", text: "post", marks: [{ type: "bold" }] }] }],
+    };
+    const r = await createComment({ ...valid, body: undefined, bodyJson }, ctx, s.deps);
+    expect(r.ok).toBe(true);
+    const data = createdData(s.create);
+    expect(data.body).toBe("Nice post");
+    expect(data.bodyHtml).toBe("<p>Nice <strong>post</strong></p>");
+  });
+
+  it("counts link marks in rich text against the link limit", async () => {
+    const link = (href: string) => ({ type: "text", text: "x", marks: [{ type: "link", attrs: { href } }] });
+    const bodyJson = { type: "doc", content: [{ type: "paragraph", content: [link("https://a.com"), { type: "text", text: " " }, link("https://b.com"), { type: "text", text: " " }, link("https://c.com")] }] };
+    const r = await createComment({ ...valid, body: undefined, bodyJson }, ctx, s.deps);
+    expect(r).toMatchObject({ ok: false, status: 400 });
+  });
+
+  it("rejects an empty rich-text comment", async () => {
+    const r = await createComment({ ...valid, body: undefined, bodyJson: { type: "doc", content: [{ type: "paragraph" }] } }, ctx, s.deps);
+    expect(r.ok).toBe(false);
   });
 
   it("refuses when comments are disabled", async () => {

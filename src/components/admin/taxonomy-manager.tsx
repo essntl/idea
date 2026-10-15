@@ -3,105 +3,187 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { api } from "./api";
+import { Sheet } from "@/components/ui/sheet";
+import { ChevronRight, PlusIcon } from "@/components/ui/icons";
+import { slugify } from "@/lib/slug";
 
 export type TaxItem = { id: string; name: string; slug: string; description?: string; count: number };
 
-function Row({ kind, item }: { kind: "category" | "tag"; item: TaxItem }) {
+type Editing = { mode: "create" } | { mode: "edit"; item: TaxItem };
+
+function TaxonomySheet({ kind, editing, onClose }: { kind: "category" | "tag"; editing: Editing | null; onClose: () => void }) {
   const router = useRouter();
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(item.name);
-  const [slug, setSlug] = useState(item.slug);
-  const [description, setDescription] = useState(item.description ?? "");
+  const item = editing?.mode === "edit" ? editing.item : null;
+  const [name, setName] = useState(item?.name ?? "");
+  const [slug, setSlug] = useState(item?.slug ?? "");
+  const [slugTouched, setSlugTouched] = useState(!!item);
+  const [description, setDescription] = useState(item?.description ?? "");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const noun = kind === "category" ? "category" : "tag";
+  const effectiveSlug = slugTouched ? slug : slugify(name);
 
   async function save() {
+    setBusy(true);
     setError(null);
     try {
-      await api(`/api/admin/taxonomy/${item.id}`, { method: "PUT", json: { kind, name, slug, description } });
-      setEditing(false);
+      if (item) await api(`/api/admin/taxonomy/${item.id}`, { method: "PUT", json: { kind, name, slug: effectiveSlug, description } });
+      else await api("/api/admin/taxonomy", { json: { kind, name, slug: effectiveSlug || undefined, description } });
+      onClose();
       router.refresh();
     } catch (e) {
       setError((e as Error).message);
-    }
-  }
-  async function remove() {
-    const what = kind === "category" ? `Delete category “${item.name}”? ${item.count} article(s) will become uncategorised.` : `Delete tag “${item.name}”? It will be removed from ${item.count} item(s).`;
-    if (!confirm(what)) return;
-    try {
-      await api(`/api/admin/taxonomy/${item.id}?kind=${kind}`, { method: "DELETE" });
-      router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
 
-  if (editing) {
-    return (
-      <li className="space-y-2 py-3">
-        <div className="grid gap-2 sm:grid-cols-2">
-          <input className="field" value={name} onChange={(e) => setName(e.target.value)} aria-label="Name" />
-          <input className="field" value={slug} onChange={(e) => setSlug(e.target.value)} aria-label="Slug" />
-        </div>
-        {kind === "category" && (
-          <input className="field" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description (optional)" aria-label="Description" />
-        )}
-        {error && <p role="alert" className="text-sm font-medium">{error}</p>}
-        <div className="flex gap-2">
-          <button type="button" className="btn" onClick={save}>Save</button>
-          <button type="button" className="btn btn-ghost" onClick={() => setEditing(false)}>Cancel</button>
-        </div>
-      </li>
-    );
+  async function remove() {
+    if (!item) return;
+    setBusy(true);
+    try {
+      await api(`/api/admin/taxonomy/${item.id}?kind=${kind}`, { method: "DELETE" });
+      onClose();
+      router.refresh();
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
   }
+
+  const usage = item
+    ? kind === "category"
+      ? `${item.count} article${item.count === 1 ? "" : "s"} will become uncategorised.`
+      : `It will be removed from ${item.count} post${item.count === 1 ? "" : "s"}.`
+    : "";
+
   return (
-    <li className="flex flex-wrap items-center justify-between gap-2 py-2">
-      <div className="min-w-0">
-        <span className="font-medium">{item.name}</span> <span className="text-sm text-muted">/{item.slug} · {item.count}</span>
-        {error && <p role="alert" className="text-sm font-medium">{error}</p>}
-      </div>
-      <div className="flex">
-        <button type="button" className="tap px-2 text-sm underline" onClick={() => setEditing(true)}>Edit</button>
-        <button type="button" className="tap px-2 text-sm text-muted hover:text-fg" onClick={remove}>Delete</button>
-      </div>
-    </li>
+    <Sheet
+      open={!!editing}
+      onClose={onClose}
+      title={item ? `Edit ${noun}` : `New ${noun}`}
+      footer={
+        confirmDelete ? (
+          <>
+            <button type="button" className="btn btn-ghost flex-1" onClick={() => setConfirmDelete(false)} disabled={busy}>
+              Keep
+            </button>
+            <button type="button" className="btn flex-1" onClick={remove} disabled={busy}>
+              Delete {noun}
+            </button>
+          </>
+        ) : (
+          <>
+            {item && (
+              <button type="button" className="btn btn-ghost" onClick={() => setConfirmDelete(true)} disabled={busy}>
+                Delete
+              </button>
+            )}
+            <span className="flex-1" />
+            <button type="button" className="btn btn-ghost" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="button" className="btn" onClick={save} disabled={busy || !name.trim()}>
+              {item ? "Save" : "Create"}
+            </button>
+          </>
+        )
+      }
+    >
+      {confirmDelete ? (
+        <p className="py-2 text-[0.9375rem]">
+          Delete <strong>{item?.name}</strong>? {usage}
+        </p>
+      ) : (
+        <form
+          className="space-y-4 pt-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
+          <div>
+            <label htmlFor="tax-name" className="mb-1 block text-sm font-medium">
+              Name
+            </label>
+            <input id="tax-name" className="field" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} autoFocus required />
+          </div>
+          <div>
+            <label htmlFor="tax-slug" className="mb-1 block text-sm font-medium">
+              URL slug
+            </label>
+            <div className="flex items-center rounded-[var(--radius-md)] border border-line-strong focus-within:border-fg">
+              <span className="pl-3 text-sm text-subtle">/{kind === "category" ? "articles/category" : "…/tag"}/</span>
+              <input
+                id="tax-slug"
+                className="min-h-11 min-w-0 flex-1 bg-transparent px-1 pr-3 outline-none"
+                value={effectiveSlug}
+                onChange={(e) => {
+                  setSlugTouched(true);
+                  setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"));
+                }}
+                maxLength={80}
+              />
+            </div>
+            <p className="mt-1 text-xs text-muted">{item ? "Changing it changes the page address." : "Follows the name until you edit it."}</p>
+          </div>
+          {kind === "category" && (
+            <div>
+              <label htmlFor="tax-desc" className="mb-1 block text-sm font-medium">
+                Description <span className="font-normal text-subtle">· optional</span>
+              </label>
+              <textarea id="tax-desc" className="field min-h-20" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} />
+              <p className="mt-1 text-xs text-muted">Shown at the top of the category page.</p>
+            </div>
+          )}
+          {error && (
+            <p role="alert" className="text-sm font-medium">
+              {error}
+            </p>
+          )}
+          <button type="submit" hidden />
+        </form>
+      )}
+    </Sheet>
   );
 }
 
 export function TaxonomyManager({ kind, items }: { kind: "category" | "tag"; items: TaxItem[] }) {
-  const router = useRouter();
-  const [name, setName] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Editing | null>(null);
+  const title = kind === "category" ? "Categories" : "Tags";
   return (
     <section>
-      <h2 className="mb-3 font-semibold">{kind === "category" ? "Categories" : "Tags"}</h2>
-      <form
-        className="mb-4 flex gap-2"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setError(null);
-          try {
-            await api("/api/admin/taxonomy", { json: { kind, name } });
-            setName("");
-            router.refresh();
-          } catch (err) {
-            setError((err as Error).message);
-          }
-        }}
-      >
-        <label htmlFor={`new-${kind}`} className="sr-only">New {kind}</label>
-        <input id={`new-${kind}`} className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder={`New ${kind}`} maxLength={60} />
-        <button type="submit" className="btn" disabled={!name.trim()}>Add</button>
-      </form>
-      {error && <p role="alert" className="mb-2 text-sm font-medium">{error}</p>}
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="font-semibold">
+          {title} <span className="font-normal text-muted">· {items.length}</span>
+        </h2>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing({ mode: "create" })}>
+          <PlusIcon width={16} height={16} /> Add
+        </button>
+      </div>
       {items.length ? (
-        <ul className="divide-y divide-line border-y border-line">
+        <ul className="card divide-y divide-line overflow-hidden">
           {items.map((i) => (
-            <Row key={i.id} kind={kind} item={i} />
+            <li key={i.id}>
+              <button type="button" onClick={() => setEditing({ mode: "edit", item: i })} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{i.name}</span>
+                  <span className="block truncate text-sm text-subtle">/{i.slug}</span>
+                </span>
+                <span className="rounded-full bg-surface-2 px-2 py-px text-xs text-muted" title={`Used ${i.count} times`}>
+                  {i.count}
+                </span>
+                <ChevronRight width={16} height={16} className="shrink-0 text-subtle" />
+              </button>
+            </li>
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-muted">None yet.</p>
+        <p className="rounded-[var(--radius-lg)] border border-dashed border-line-strong py-8 text-center text-sm text-muted">None yet.</p>
       )}
+      {/* Remount per item so the form starts from that item's values. */}
+      <TaxonomySheet key={editing ? (editing.mode === "edit" ? editing.item.id : "new") : "closed"} kind={kind} editing={editing} onClose={() => setEditing(null)} />
     </section>
   );
 }

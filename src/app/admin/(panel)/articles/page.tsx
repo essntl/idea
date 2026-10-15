@@ -24,7 +24,7 @@ export default async function AdminArticlesPage({ searchParams }: PageProps<"/ad
       where, orderBy: orderBy(p.sort), skip: (p.page - 1) * ADMIN_PAGE_SIZE, take: ADMIN_PAGE_SIZE,
       select: {
         id: true, title: true, slug: true, status: true, publishedAt: true, updatedAt: true,
-        tags: { select: { name: true } }, category: { select: { name: true } }, _count: { select: { comments: true } },
+        draftUpdatedAt: true, tags: { select: { name: true } }, category: { select: { name: true } }, _count: { select: { comments: true } },
       },
     }),
     prisma.article.count({ where }),
@@ -34,15 +34,15 @@ export default async function AdminArticlesPage({ searchParams }: PageProps<"/ad
   return (
     <div className="max-w-5xl">
       <PageHeader title="Articles" description="Long-form articles shown on /articles.">
-        <ImportMarkdownButton type="article" />
         <NewContentButton type="article" label="New article" />
+        <ImportMarkdownButton type="article" />
       </PageHeader>
       <ListFilters action="/admin/articles" values={{ q: p.q, status: p.status, tag: p.tag, category: p.category, sort: p.sort }} statuses={["draft", "published", "scheduled"]} categories={categories} tags={tags} />
       <ContentTable
         type="article"
         rows={rows.map((r) => ({
           id: r.id, title: r.title, status: effectiveStatus(r.status, r.publishedAt), date: r.publishedAt?.toISOString() ?? null,
-          updatedAt: r.updatedAt.toISOString(), tags: r.tags.map((t) => t.name), category: r.category?.name ?? null,
+          updatedAt: (r.draftUpdatedAt ?? r.updatedAt).toISOString(), tags: r.tags.map((t) => t.name), category: r.category?.name ?? null, pending: !!r.draftUpdatedAt,
           comments: r._count.comments, url: `/articles/${r.slug}`,
         }))}
       />

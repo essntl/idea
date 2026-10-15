@@ -20,14 +20,14 @@ export function ArticleCard({ article: a, priority = false }: { article: Article
   return (
     <article className="group">
       <Link href={`/articles/${a.slug}`} className="block" tabIndex={-1} aria-hidden="true">
-        <div className="relative aspect-[16/9] overflow-hidden border border-line bg-surface">
+        <div className="relative aspect-[16/9] overflow-hidden rounded-[var(--radius-lg)] bg-surface">
           {a.previewImage && (
             <Image
               src={a.previewImage.url}
               alt={a.previewImage.alt || ""}
               fill
               sizes="(min-width: 1024px) 480px, (min-width: 768px) 45vw, 100vw"
-              className="object-cover transition-opacity group-hover:opacity-90"
+              className="object-cover transition-transform duration-300 ease-out group-hover:scale-[1.02]"
               priority={priority}
             />
           )}

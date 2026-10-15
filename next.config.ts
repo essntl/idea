@@ -12,6 +12,8 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  // Dev-only badge; keep it away from the admin sidebar.
+  devIndicators: { position: "bottom-right" },
   // Old Ghost URLs end with "/"; proxy.ts handles trailing slashes so legacy links redirect in one hop.
   skipTrailingSlashRedirect: true,
   serverExternalPackages: ["sharp", "@node-rs/argon2", "happy-dom", "pg"],

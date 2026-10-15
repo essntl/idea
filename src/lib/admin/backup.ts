@@ -12,6 +12,7 @@ import tar from "tar-stream";
 import { z } from "zod";
 import { prisma } from "../db";
 import { resolveMediaPath } from "../media";
+import { Prisma } from "@/generated/prisma/client";
 
 export const BACKUP_VERSION = 1;
 
@@ -71,6 +72,7 @@ const backupSchema = z.object({
   blogPosts: z.array(z.object({
     id: z.string(), slug: z.string(), title: z.string(), description: z.string(), contentJson: z.any(), contentHtml: z.string(),
     contentText: z.string(), status: z.enum(["draft", "published", "scheduled"]), publishedAt: nDate, createdAt: date, updatedAt: date,
+    draft: z.any().optional(), draftUpdatedAt: nDate.optional(),
     tagIds: z.array(z.string()),
   })),
   articles: z.array(z.object({
@@ -78,14 +80,15 @@ const backupSchema = z.object({
     contentText: z.string(), toc: z.any(), previewImageId: z.string().nullable(), categoryId: z.string().nullable(),
     status: z.enum(["draft", "published", "scheduled"]), publishedAt: nDate, createdAt: date, updatedAt: date,
     seoTitle: z.string().nullable(), seoDescription: z.string().nullable(), readingTime: z.number(), legacyUrl: z.string().nullable(),
+    draft: z.any().optional(), draftUpdatedAt: nDate.optional(),
     tagIds: z.array(z.string()),
   })),
   comments: z.array(z.object({
-    id: z.string(), articleId: z.string(), parentId: z.string().nullable(), authorName: z.string(), authorEmail: z.string().nullable(),
+    id: z.string(), articleId: z.string().nullable(), blogPostId: z.string().nullable().default(null), parentId: z.string().nullable(), authorName: z.string(), authorEmail: z.string().nullable(),
     body: z.string(), isAdminReply: z.boolean(), status: z.enum(["visible", "pending", "hidden", "deleted"]), ipHash: z.string().nullable(),
     createdAt: date,
   })),
-  pages: z.array(z.object({ id: z.string(), key: z.string(), title: z.string(), contentJson: z.any(), contentHtml: z.string(), updatedAt: date })),
+  pages: z.array(z.object({ id: z.string(), key: z.string(), title: z.string(), contentJson: z.any(), contentHtml: z.string(), updatedAt: date, draft: z.any().optional(), draftUpdatedAt: nDate.optional() })),
   settings: z.array(z.object({ key: z.string(), value: z.any() })),
   redirects: z.array(z.object({ id: z.string(), fromPath: z.string(), toPath: z.string(), statusCode: z.number(), createdAt: date })),
 });
@@ -143,14 +146,14 @@ export async function restoreBackup(input: Readable): Promise<RestoreSummary> {
       await tx.tag.createMany({ data: data.tags });
       await tx.media.createMany({ data: data.media });
       for (const { tagIds, ...p } of data.blogPosts) {
-        await tx.blogPost.create({ data: { ...p, contentJson: p.contentJson ?? {}, tags: { connect: tagIds.map((id) => ({ id })) } } });
+        await tx.blogPost.create({ data: { ...p, draft: p.draft ?? Prisma.DbNull, contentJson: p.contentJson ?? {}, tags: { connect: tagIds.map((id) => ({ id })) } } });
       }
       for (const { tagIds, ...a } of data.articles) {
-        await tx.article.create({ data: { ...a, contentJson: a.contentJson ?? {}, toc: a.toc ?? [], tags: { connect: tagIds.map((id) => ({ id })) } } });
+        await tx.article.create({ data: { ...a, draft: a.draft ?? Prisma.DbNull, contentJson: a.contentJson ?? {}, toc: a.toc ?? [], tags: { connect: tagIds.map((id) => ({ id })) } } });
       }
       // Parents before replies (sorted by createdAt on export).
       for (const c of data.comments) await tx.comment.create({ data: c });
-      for (const p of data.pages) await tx.page.create({ data: { ...p, contentJson: p.contentJson ?? {} } });
+      for (const p of data.pages) await tx.page.create({ data: { ...p, draft: p.draft ?? Prisma.DbNull, contentJson: p.contentJson ?? {} } });
       for (const s of data.settings) await tx.setting.create({ data: { key: s.key, value: s.value ?? null } });
       await tx.redirect.createMany({ data: data.redirects });
     },

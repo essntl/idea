@@ -41,12 +41,16 @@ model BlogPost {
   contentHtml String     @default("")
   contentText String     @default("")
   tags        Tag[]      @relation("BlogPostTags")
+  comments    Comment[]
   status      PostStatus @default(draft)
   publishedAt DateTime?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
   @@index([status, publishedAt])
+  /// Pending (unpublished) edits to live content: the editor payload, applied by "Publish changes".
+  draft          Json?
+  draftUpdatedAt DateTime?
 }
 
 model Article {
@@ -75,6 +79,9 @@ model Article {
 
   @@index([status, publishedAt])
   @@index([categoryId])
+  /// Pending (unpublished) edits to live content: the editor payload, applied by "Publish changes".
+  draft          Json?
+  draftUpdatedAt DateTime?
 }
 
 model Category {
@@ -110,22 +117,29 @@ model Media {
   articles  Article[]
 }
 
+/// A comment belongs to exactly one article or blog post (enforced by a CHECK constraint in the migration).
 model Comment {
   id           String        @id @default(cuid())
-  articleId    String
-  article      Article       @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  articleId    String?
+  article      Article?      @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  blogPostId   String?
+  blogPost     BlogPost?     @relation(fields: [blogPostId], references: [id], onDelete: Cascade)
   parentId     String?
   parent       Comment?      @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies      Comment[]     @relation("CommentReplies")
   authorName   String
   authorEmail  String?
+  /// Plain text (limits, admin search, fallback for comments written before rich text).
   body         String
+  /// Sanitized rich-text HTML rendered from the comment editor.
+  bodyHtml     String?
   isAdminReply Boolean       @default(false)
   status       CommentStatus @default(visible)
   ipHash       String?
   createdAt    DateTime      @default(now())
 
   @@index([articleId, createdAt])
+  @@index([blogPostId, createdAt])
   @@index([status])
   @@index([ipHash, createdAt])
 }
@@ -137,6 +151,9 @@ model Page {
   contentJson Json
   contentHtml String   @default("")
   updatedAt   DateTime @updatedAt
+  /// Pending (unpublished) edits to live content: the editor payload, applied by "Publish changes".
+  draft          Json?
+  draftUpdatedAt DateTime?
 }
 
 model Setting {
