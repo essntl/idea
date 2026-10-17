@@ -93,12 +93,16 @@ function rehypeTaskLists() {
  * Converts a markdown file into editor content.
  * `resolveImage` maps a local reference to a media URL (or null if it can't be found).
  */
-export function parseMarkdown(source: string, resolveImage: (ref: string) => string | null = () => null): MarkdownImport {
+export function parseMarkdown(
+  source: string,
+  resolveImage: (ref: string) => string | null = () => null,
+  opts: { extractTitle?: boolean } = {},
+): MarkdownImport {
   const { data, content } = matter(source.replace(/^﻿/, ""));
   const frontMatter = normalizeFrontMatter(data);
   let body = content;
   let title = frontMatter.title ?? "";
-  if (!title) {
+  if (!title && opts.extractTitle !== false) {
     // Use a leading "# Heading" as the title.
     const m = body.match(/^\s*#\s+(.+?)\s*#*\s*(\r?\n|$)/);
     if (m) {
@@ -155,8 +159,21 @@ export type ExportMeta = {
 
 /** Editor JSON → markdown with YAML front matter. */
 export function exportMarkdown(doc: JSONContent, meta: ExportMeta): string {
+  const md = docToMarkdown(doc);
+  const fm: Record<string, unknown> = { title: meta.title };
+  if (meta.description) fm.description = meta.description;
+  if (meta.slug) fm.slug = meta.slug;
+  if (meta.date) fm.date = meta.date;
+  if (meta.category) fm.category = meta.category;
+  if (meta.tags?.length) fm.tags = meta.tags;
+  if (meta.image) fm.image = meta.image;
+  return matter.stringify(md, fm);
+}
+
+/** Editor JSON → markdown body. */
+export function docToMarkdown(doc: JSONContent): string {
   const html = renderContentToHtml(doc);
-  const md = String(
+  return String(
     unified()
       .use(rehypeParse, { fragment: true })
       .use(() => (tree: HastRoot) => {
@@ -190,13 +207,4 @@ export function exportMarkdown(doc: JSONContent, meta: ExportMeta): string {
       .use(remarkStringify, { bullet: "-", emphasis: "*", strong: "*", fences: true, rule: "-" })
       .processSync(html),
   );
-
-  const fm: Record<string, unknown> = { title: meta.title };
-  if (meta.description) fm.description = meta.description;
-  if (meta.slug) fm.slug = meta.slug;
-  if (meta.date) fm.date = meta.date;
-  if (meta.category) fm.category = meta.category;
-  if (meta.tags?.length) fm.tags = meta.tags;
-  if (meta.image) fm.image = meta.image;
-  return matter.stringify(md, fm);
 }

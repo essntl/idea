@@ -8,7 +8,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 
-const API = "https://api.github.com";
+export const API = "https://api.github.com";
 const TIMEOUT_MS = 5_000;
 const PROFILE_TTL = 30 * 60;
 const REPO_TTL = 60 * 60;
@@ -27,7 +27,7 @@ class GithubError extends Error {
   }
 }
 
-async function request(url: string, init: RequestInit = {}): Promise<Response> {
+export async function request(url: string, init: RequestInit = {}): Promise<Response> {
   if (Date.now() < backoffUntil) throw new GithubError(503, "GitHub temporarily skipped after an earlier failure");
   const t = token();
   try {
@@ -55,7 +55,7 @@ async function request(url: string, init: RequestInit = {}): Promise<Response> {
   }
 }
 
-async function json<T>(path: string): Promise<T> {
+export async function json<T>(path: string): Promise<T> {
   const res = await request(`${API}${path}`);
   if (!res.ok) throw new GithubError(res.status, `GitHub ${path} → ${res.status}`);
   return (await res.json()) as T;

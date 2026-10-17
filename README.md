@@ -18,12 +18,13 @@ Built with Next.js 16, React 19, TypeScript, Tailwind CSS 4, PostgreSQL 16, Pris
 3. [HTTPS: reverse proxy or Cloudflare Tunnel](#https-reverse-proxy-or-cloudflare-tunnel)
 4. [Captcha keys](#captcha-keys)
 5. [Projects and GitHub activity](#projects-and-github-activity)
-6. [Migrating from Ghost](#migrating-from-ghost)
-7. [Backup, restore and updates](#backup-restore-and-updates)
-8. [Local development](#local-development)
-9. [Configuration reference](#configuration-reference)
-10. [Icon and branding](#icon-and-branding)
-11. [Project layout](#project-layout)
+6. [AI assistant](#ai-assistant)
+7. [Migrating from Ghost](#migrating-from-ghost)
+8. [Backup, restore and updates](#backup-restore-and-updates)
+9. [Local development](#local-development)
+10. [Configuration reference](#configuration-reference)
+11. [Icon and branding](#icon-and-branding)
+12. [Project layout](#project-layout)
 
 ---
 
@@ -165,13 +166,30 @@ Every comment and reply is verified server-side. Choose a provider with `CAPTCHA
 
 ## Projects and GitHub activity
 
-**Admin → Projects** manages the `/projects` page. Each project has a status (Building, Live, Planning, Paused, Archived), a summary, an optional write-up and cover image, a tech stack, and up to three links: repository, website and package (npm, GHCR, PyPI, Docker Hub, app stores…). Featured projects are listed first and appear on the home page.
+**Admin → Projects** manages the `/projects` page. **New project** can start blank or **from a GitHub repository**: paste its link and the draft is filled in from the repository: name, description, website, a published package (npm, PyPI, crates.io or GHCR, only when the registry links back to the repository), a detected tech stack, a status guessed from activity and releases, and the README as the write-up (badges removed, images and relative links pointing at GitHub). With the [AI assistant](#ai-assistant) on, AI writes the summary, stack, status and write-up from the README and project files instead. Either way it's a draft for you to check before publishing. Each project has a status (Building, Live, Planning, Paused, Archived), a summary, an optional write-up and cover image, a tech stack, and up to three links: repository, website and package (npm, GHCR, PyPI, Docker Hub, app stores…). Featured projects are listed first and appear on the home page.
 
 - **Progress updates:** in a blog post's or article's settings, pick a **Project**. The post is then listed on the project page as a progress update, and the post links back to the project.
 - **Repository stats:** for GitHub repositories, project cards show stars, language and the last push; the project page also shows forks, open issues, the latest release and recent commits.
 - **GitHub activity:** the top of `/projects` shows your GitHub profile picture, public repositories, stars, followers, contributions, current and longest streak, a contribution graph, languages and recently pushed repositories. The account comes from the GitHub link in **Admin → Settings**; the widget can be turned off there.
 
 GitHub data is cached (profile 30 minutes, repositories 1 hour) and never blocks a page: if GitHub is slow or unreachable, the widgets are simply left out. No token is needed for a personal site. Set `GITHUB_TOKEN` (a fine-grained, read-only token with no extra permissions) to raise GitHub's limit from 60 to 5,000 requests an hour.
+
+---
+
+## AI assistant
+
+Optional. Turn it on in **Admin → Settings → AI assistant**, pick a provider and paste an API key:
+
+- **Anthropic (Claude)**: key from <https://console.anthropic.com>. Models: Claude Sonnet 5.5 (default), Opus 5.5 (best writing) or Haiku 5.5 (fastest).
+- **OpenAI-compatible**: any `/v1/chat/completions` endpoint: OpenAI, OpenRouter, or a local model with Ollama (`http://ollama:11434/v1`, no key needed) or LM Studio. Enter the base URL and model name.
+
+**Test connection** checks the settings before you save them. What it adds:
+
+- **Editor:** select text and the formatting popup includes an **Ask AI** box: type an instruction and press Enter. Or type **/ai** anywhere and the AI prompt opens, ready to type, for the paragraph you're in (in an empty paragraph it writes new text). On phones, "+" → **Ask AI** works on the paragraph at the cursor (or writes new text in an empty one). The answer streams straight into the page as a live diff (removed words struck out, new words highlighted). Ask for changes as often as you like, then **Accept** (or **Insert below**); nothing changes before that, and Ctrl+Z undoes it. Illustrations, embeds, tables, code blocks and dividers inside a selection are never sent to the AI: they're swapped for markers and put back exactly as they were.
+- **Suggest** next to the description, excerpt or summary: writes it from the content.
+- **New project from a repository:** writes the whole entry (see [Projects](#projects-and-github-activity)).
+
+The API key is stored encrypted with `NEXTAUTH_SECRET`, is never sent back to the browser and is left out of backups. `AI_API_KEY` in the environment overrides it. Only the text you're working on (plus the rest of the document as context) is sent to the provider, and only when you click an AI action.
 
 ---
 
@@ -345,6 +363,7 @@ All settings are environment variables, documented in [`.env.example`](.env.exam
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | test keys | Cloudflare Turnstile |
 | `RECAPTCHA_SITE_KEY`, `RECAPTCHA_SECRET_KEY` | — | Google reCAPTCHA v3 |
 | `GITHUB_TOKEN` | — | Optional; higher GitHub API limit for the projects page |
+| `AI_API_KEY` | — | Optional; overrides the AI key saved in Settings |
 | `UPLOAD_DIR` | `/data/uploads` in Docker | Image storage |
 | `MAX_UPLOAD_MB` | `15` | Per image |
 | `TZ` | `UTC` | Timezone for displayed dates |

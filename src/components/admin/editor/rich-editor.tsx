@@ -4,7 +4,7 @@ import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/r
 import { BubbleMenu } from "@tiptap/react/menus";
 import type { JSONContent } from "@tiptap/core";
 import { Placeholder } from "@tiptap/extensions";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { schemaExtensions, TEXT_COLORS } from "@/lib/content/extensions";
 import { toggleCodeBlock } from "@/lib/content/editor-commands";
@@ -13,8 +13,9 @@ import { createSlashCommand, SLASH_ITEMS, type SlashActions } from "./slash-comm
 import { Sheet } from "@/components/ui/sheet";
 import {
   CodeBlockIcon, CodeIcon, EraserIcon, HighlightIcon, ImageIcon, LinkIcon, ListCheckIcon, ListIcon, ListOrderedIcon, PlusIcon,
-  QuoteIcon, RedoIcon, TableIcon, TextColorIcon, TrashIcon, UndoIcon,
+  ArrowRight, QuoteIcon, RedoIcon, SparkleIcon, TableIcon, TextColorIcon, TrashIcon, UndoIcon,
 } from "@/components/ui/icons";
+import { AiInline, AiPreview, captureAiTarget, type AiRequest, type AiTarget } from "./ai-inline";
 import { Menu, type MenuItem } from "@/components/ui/menu";
 import { isImageFile, pickFiles, uploadImages, type MediaItem } from "./upload";
 import { MediaPicker } from "../media-picker";
@@ -28,10 +29,15 @@ type Props = {
   onReady?: (editor: Editor) => void;
   /** Element the formatting bar renders into (the editor's fixed header). Phones have no bar. */
   toolbarHost?: HTMLElement | null;
+  /** AI assistant available (configured in Settings). */
+  ai?: boolean;
+  /** Document title, given to the AI as context. */
+  title?: string;
 };
 
-export function RichEditor({ content, onChange, placeholder = "Write something, or type “/” for commands…", onReady, toolbarHost }: Props) {
+export function RichEditor({ content, onChange, placeholder = "Write something, or type “/” for commands…", onReady, toolbarHost, ai = false, title = "" }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [aiTarget, setAiTarget] = useState<AiTarget | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const onChangeRef = useRef(onChange);
@@ -63,9 +69,11 @@ export function RichEditor({ content, onChange, placeholder = "Write something, 
     insertFilesRef.current = insertFiles;
   });
 
+  const askAiRef = useRef<(() => void) | null>(null);
   const [actions] = useState<SlashActions>(() => ({
     pickImage: () => void pickFiles().then((f) => insertFilesRef.current(f)),
     pickFromLibrary: () => setPickerOpen(true),
+    askAi: () => askAiRef.current,
   }));
 
   const extensions = useMemo(
@@ -73,6 +81,7 @@ export function RichEditor({ content, onChange, placeholder = "Write something, 
       ...schemaExtensions({ image: EditorFigure, embed: EditorEmbed, codeBlock: EditorCodeBlock }),
       Placeholder.configure({ placeholder, includeChildren: false }),
       createSlashCommand(() => actions),
+      AiPreview,
     ],
     [placeholder, actions],
   );
@@ -115,12 +124,30 @@ export function RichEditor({ content, onChange, placeholder = "Write something, 
     if (editor) onReady?.(editor);
   }, [editor, onReady]);
 
+  const openAi = (initial?: AiRequest) => {
+    if (editor) setAiTarget({ ...captureAiTarget(editor), initial });
+  };
+  const closeAi = useCallback(() => setAiTarget(null), []);
+  useEffect(() => {
+    askAiRef.current = ai ? () => openAi() : null;
+  });
+
+  // Width of the text column: the selection menu stays within it.
+  const [columnWidth, setColumnWidth] = useState(0);
+  useEffect(() => {
+    if (!editor) return;
+    const ro = new ResizeObserver(([entry]) => setColumnWidth(entry!.contentRect.width));
+    ro.observe(editor.view.dom);
+    return () => ro.disconnect();
+  }, [editor]);
+
   return (
     <div className="editor">
       {editor && toolbarHost && createPortal(<Toolbar editor={editor} actions={actions} />, toolbarHost)}
-      {editor && <SelectionMenu editor={editor} />}
+      {editor && <SelectionMenu editor={editor} onAi={ai ? openAi : undefined} columnWidth={columnWidth} hidden={!!aiTarget} />}
       <EditorContent editor={editor} />
-      {editor && <MobileInsert editor={editor} actions={actions} />}
+      {editor && <MobileInsert editor={editor} actions={actions} onAi={ai ? () => openAi() : undefined} />}
+      {editor && ai && <AiInline editor={editor} target={aiTarget} title={title} onClose={closeAi} />}
       {status && (
         <p role="status" className="floating fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md animate-sheet-in px-4 py-3 text-sm sm:inset-x-auto sm:right-6">
           {status}
@@ -145,7 +172,7 @@ export function RichEditor({ content, onChange, placeholder = "Write something, 
  * Phones have no fixed toolbar: text is formatted via the selection menu, and blocks are inserted
  * from this "+" button (same list as the "/" command).
  */
-function MobileInsert({ editor, actions }: { editor: Editor; actions: SlashActions }) {
+function MobileInsert({ editor, actions, onAi }: { editor: Editor; actions: SlashActions; onAi?: () => void }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -159,6 +186,22 @@ function MobileInsert({ editor, actions }: { editor: Editor; actions: SlashActio
         <PlusIcon width={22} height={22} />
       </button>
       <Sheet open={open} onClose={() => setOpen(false)} title="Insert">
+        {onAi && (
+          <button
+            type="button"
+            className="mb-2 flex w-full items-center gap-3 rounded-[var(--radius-md)] border border-line px-3 py-2.5 text-left hover:bg-surface-2"
+            onClick={() => {
+              setOpen(false);
+              onAi();
+            }}
+          >
+            <SparkleIcon width={18} height={18} />
+            <span>
+              <span className="block text-sm font-medium">Ask AI</span>
+              <span className="block text-xs text-muted">Edit this paragraph or write something new</span>
+            </span>
+          </button>
+        )}
         <ul className="-mx-2 grid grid-cols-2 gap-1">
           {SLASH_ITEMS.map((item) => (
             <li key={item.title}>
@@ -361,13 +404,27 @@ function Toolbar({ editor, actions }: { editor: Editor; actions: SlashActions })
   );
 }
 
-function SelectionMenu({ editor }: { editor: Editor }) {
+/** Height of the sticky editor header (and the admin bar above it on phones), which covers the top of the page. */
+function headerSpace() {
+  if (typeof document === "undefined") return 0;
+  const header = document.querySelector<HTMLElement>("[data-editor-header]");
+  return header ? Math.max(0, header.getBoundingClientRect().bottom) + 8 : 0;
+}
+
+function SelectionMenu({ editor, onAi, columnWidth, hidden }: { editor: Editor; onAi?: (request: AiRequest) => void; columnWidth: number; hidden: boolean }) {
   const s = useMarks(editor);
   const c = () => editor.chain().focus();
+  const [prompt, setPrompt] = useState("");
+  const ask = (request: AiRequest) => {
+    setPrompt("");
+    onAi?.(request);
+  };
   return (
     <BubbleMenu
       editor={editor}
-      options={{ placement: "top", offset: 8 }}
+      // Starts where the selection starts and never leaves the text column.
+      // Flips below the selection when the editor's fixed header leaves no room above.
+      options={{ placement: "top-start", offset: 8, shift: { boundary: editor.view.dom, padding: 0, crossAxis: false }, flip: { padding: { top: headerSpace() } } }}
       shouldShow={({ editor: e, state }) => {
         const { empty, from, to } = state.selection;
         if (empty || !e.isEditable) return false;
@@ -375,7 +432,9 @@ function SelectionMenu({ editor }: { editor: Editor }) {
         return state.doc.textBetween(from, to).trim().length > 0;
       }}
     >
-      <div className="floating flex w-max max-w-[calc(100vw-1.5rem)] flex-wrap items-center justify-center p-1 text-fg">
+      {/* Hidden while the AI bar is working on the selection. */}
+      <div className="floating w-max p-1 text-fg" style={{ maxWidth: columnWidth || undefined, display: hidden ? "none" : undefined }}>
+        <div className="flex flex-wrap items-center">
         <Btn label="Bold" active={s.bold} onClick={() => c().toggleBold().run()}><b>B</b></Btn>
         <Btn label="Italic" active={s.italic} onClick={() => c().toggleItalic().run()}><i>I</i></Btn>
         <Btn label="Underline" active={s.underline} onClick={() => c().toggleUnderline().run()}><u>U</u></Btn>
@@ -399,6 +458,43 @@ function SelectionMenu({ editor }: { editor: Editor }) {
             <span className="font-semibold" style={{ color: col.value ?? undefined }}>A</span>
           </Btn>
         ))}
+        </div>
+        {onAi && (
+          <>
+            {/* Typing here edits the selection with AI right away; the result streams in below the text. */}
+            <form
+              className="mt-1 flex items-center gap-2 border-t border-line px-1.5 pt-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (prompt.trim()) ask({ action: "custom", instruction: prompt.trim() });
+              }}
+            >
+              <SparkleIcon width={16} height={16} className="shrink-0 text-muted" />
+              <label htmlFor="ai-quick" className="sr-only">
+                Ask AI to edit the selection
+              </label>
+              <input
+                id="ai-quick"
+                className="min-h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-subtle"
+                placeholder="Ask AI to edit the selection…"
+                value={prompt}
+                maxLength={1000}
+                autoComplete="off"
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setPrompt("");
+                    editor.commands.focus();
+                  }
+                }}
+              />
+              <button type="submit" className="btn-quiet min-w-8 px-1.5" disabled={!prompt.trim()} aria-label="Run" onMouseDown={(e) => e.preventDefault()}>
+                <ArrowRight width={15} height={15} />
+              </button>
+            </form>
+          </>
+        )}
       </div>
     </BubbleMenu>
   );

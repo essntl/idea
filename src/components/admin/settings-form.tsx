@@ -54,11 +54,13 @@ export function SettingsForm({
   envCaptcha,
   captchaKeys,
   githubToken,
+  aiKey,
 }: {
   initial: Settings;
   envCaptcha: "turnstile" | "recaptcha";
   captchaKeys: { turnstile: boolean; recaptcha: boolean };
   githubToken: boolean;
+  aiKey: AiKeyStatus;
 }) {
   const [saved, setSaved] = useState(initial);
   const [s, setS] = useState(initial);
@@ -154,6 +156,8 @@ export function SettingsForm({
           </p>
         </Card>
 
+        <AiCard s={s} set={set} initialKey={aiKey} />
+
         <Card title="Comments" description="Visitors can comment on articles and blog posts without an account.">
           <div className="divide-y divide-line">
             <div className="pb-4">
@@ -204,6 +208,161 @@ export function SettingsForm({
         </div>
       )}
     </div>
+  );
+}
+
+export type AiKeyStatus = { source: "env" | "saved" | null; hint: string | null; unreadable: boolean };
+
+const ANTHROPIC_MODELS = ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"];
+
+function AiCard({ s, set, initialKey }: { s: Settings; set: <K extends keyof Settings>(k: K, v: Settings[K]) => void; initialKey: AiKeyStatus }) {
+  const id = useId();
+  const [key, setKey] = useState(initialKey);
+  const [draftKey, setDraftKey] = useState("");
+  const [replacing, setReplacing] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const anthropic = s.aiProvider === "anthropic";
+
+  async function run(fn: () => Promise<void>) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await fn();
+    } catch (err) {
+      setMsg({ ok: false, text: (err as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const saveKey = () =>
+    run(async () => {
+      setKey(await api<AiKeyStatus>("/api/admin/ai/key", { method: "PUT", json: { key: draftKey } }));
+      setDraftKey("");
+      setReplacing(false);
+      setMsg({ ok: true, text: "API key saved." });
+    });
+
+  const removeKey = () =>
+    run(async () => {
+      if (!confirm("Remove the saved API key?")) return;
+      setKey(await api<AiKeyStatus>("/api/admin/ai/key", { method: "DELETE" }));
+      setMsg({ ok: true, text: "API key removed." });
+    });
+
+  const test = () =>
+    run(async () => {
+      const r = await api<{ model: string }>("/api/admin/ai/test", { json: { provider: s.aiProvider, model: s.aiModel, baseUrl: s.aiBaseUrl } });
+      setMsg({ ok: true, text: `Connected. ${r.model} answered.` });
+    });
+
+  return (
+    <Card
+      title="AI assistant"
+      description="Edit posts with AI and let it draft project entries from a GitHub repository. Text you send to it goes to the provider you choose."
+    >
+      <Switch
+        label="Turn on AI features"
+        description="Adds an AI button to the editor, summary suggestions, and AI drafting when you create a project from a repository."
+        checked={s.aiEnabled}
+        onChange={(v) => set("aiEnabled", v)}
+      />
+      <Field label="Provider" htmlFor={`${id}-provider`}>
+        <Select
+          id={`${id}-provider`}
+          className="field"
+          value={s.aiProvider}
+          onChange={(v) => {
+            const provider = v as Settings["aiProvider"];
+            set("aiProvider", provider);
+            if (provider === "anthropic" && !ANTHROPIC_MODELS.includes(s.aiModel)) set("aiModel", ANTHROPIC_MODELS[0]!);
+            if (provider === "openai" && ANTHROPIC_MODELS.includes(s.aiModel)) set("aiModel", "");
+          }}
+          options={[
+            { value: "anthropic", label: "Anthropic (Claude)" },
+            { value: "openai", label: "OpenAI-compatible", hint: "OpenAI, OpenRouter, Ollama, LM Studio…" },
+          ]}
+        />
+      </Field>
+      {!anthropic && (
+        <Field label="Base URL" htmlFor={`${id}-base`} help="The API root, ending in /v1. Ollama on the same server: http://ollama:11434/v1.">
+          <input id={`${id}-base`} type="url" inputMode="url" className="field" placeholder="https://api.openai.com/v1" value={s.aiBaseUrl} onChange={(e) => set("aiBaseUrl", e.target.value)} />
+        </Field>
+      )}
+      <Field
+        label="Model"
+        htmlFor={`${id}-model`}
+        help={anthropic ? "Sonnet is a good default. Opus writes best; Haiku is fastest and cheapest." : "The model name on your endpoint, e.g. llama3.1 or gpt-4o-mini."}
+      >
+        {anthropic ? (
+          <Select
+            id={`${id}-model`}
+            className="field"
+            value={s.aiModel || ANTHROPIC_MODELS[0]!}
+            onChange={(v) => set("aiModel", v)}
+            options={[
+              { value: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", hint: "Balanced (default)" },
+              { value: "claude-opus-5-5", label: "Claude Opus 5.5", hint: "Best quality" },
+              { value: "claude-haiku-5-5", label: "Claude Haiku 5.5", hint: "Fastest" },
+            ]}
+          />
+        ) : (
+          <input id={`${id}-model`} className="field" value={s.aiModel} onChange={(e) => set("aiModel", e.target.value)} placeholder="Model name" />
+        )}
+      </Field>
+      <Field
+        label="API key"
+        htmlFor={`${id}-key`}
+        help={anthropic ? "From console.anthropic.com → API keys. Stored encrypted and never shown again." : "Leave empty for a local endpoint that needs no key."}
+      >
+        {key.source === "env" ? (
+          <p className="pt-2.5 text-sm text-muted">
+            Set by <code>AI_API_KEY</code> in the environment (ends in …{key.hint}).
+          </p>
+        ) : key.source === "saved" && !replacing ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="mr-auto text-sm text-muted">Saved key ending in …{key.hint}</span>
+            <button type="button" className="btn-quiet" onClick={() => setReplacing(true)} disabled={busy}>
+              Replace
+            </button>
+            <button type="button" className="btn-quiet" onClick={removeKey} disabled={busy}>
+              Remove
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div className="flex gap-2">
+              <input
+                id={`${id}-key`}
+                type="password"
+                className="field min-w-0 flex-1"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={anthropic ? "sk-ant-…" : "sk-…"}
+                value={draftKey}
+                onChange={(e) => setDraftKey(e.target.value)}
+              />
+              <button type="button" className="btn btn-ghost shrink-0" onClick={saveKey} disabled={busy || draftKey.trim().length < 8}>
+                Save key
+              </button>
+            </div>
+            {key.unreadable && <p className="mt-1 text-xs font-medium">The saved key can&rsquo;t be read any more (NEXTAUTH_SECRET changed). Enter it again.</p>}
+            {replacing && (
+              <button type="button" className="mt-1 text-xs text-muted underline" onClick={() => setReplacing(false)}>
+                Keep the current key
+              </button>
+            )}
+          </div>
+        )}
+      </Field>
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <Status msg={msg} />
+        <button type="button" className="btn btn-ghost" onClick={test} disabled={busy}>
+          {busy ? "Working…" : "Test connection"}
+        </button>
+      </div>
+    </Card>
   );
 }
 

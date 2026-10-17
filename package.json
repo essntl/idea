@@ -42,6 +42,7 @@
     "@tiptap/static-renderer": "^3.32.0",
     "@tiptap/suggestion": "^3.32.0",
     "cheerio": "^1.2.0",
+    "diff": "^8.0.4",
     "gray-matter": "^4.0.3",
     "happy-dom": "^20.14.6",
     "hast-util-to-string": "^3.0.1",

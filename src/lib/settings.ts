@@ -18,6 +18,12 @@ export const settingsSchema = z.object({
   commentsEnabled: z.boolean(),
   /** GitHub profile, contribution graph and streaks on /projects (account taken from githubUrl). */
   showGithubActivity: z.boolean(),
+  /** AI assistant (editor actions, project drafts from a repository). The API key is stored separately, encrypted. */
+  aiEnabled: z.boolean(),
+  aiProvider: z.enum(["anthropic", "openai"]),
+  aiModel: z.string().trim().max(120),
+  /** OpenAI-compatible endpoint, e.g. https://api.openai.com/v1 or http://ollama:11434/v1. */
+  aiBaseUrl: z.string().trim().url().or(z.literal("")),
   postsPerPage: z.number().int().min(3).max(100),
 });
 
@@ -35,6 +41,10 @@ export const DEFAULT_SETTINGS: Settings = {
   commentsRequireApproval: false,
   commentsEnabled: true,
   showGithubActivity: true,
+  aiEnabled: false,
+  aiProvider: "anthropic",
+  aiModel: "claude-sonnet-5-5",
+  aiBaseUrl: "",
   postsPerPage: 10,
 };
 

@@ -14,7 +14,7 @@ import { Select } from "@/components/ui/select";
 import { pickFiles, uploadImages, type MediaItem } from "./editor/upload";
 import { slugify } from "@/lib/slug";
 import { publishPreviewDraft, type PreviewDraft } from "@/lib/admin/preview-draft";
-import { ArrowLeft, EyeIcon, SlidersIcon } from "@/components/ui/icons";
+import { ArrowLeft, EyeIcon, SlidersIcon, SparkleIcon } from "@/components/ui/icons";
 import { Menu, type MenuItem } from "@/components/ui/menu";
 import { Sheet } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
@@ -57,6 +57,8 @@ type Props = {
   categories?: { id: string; name: string }[];
   /** Projects a blog post or article can belong to. */
   projects?: { id: string; title: string }[];
+  /** AI assistant configured in Settings. */
+  ai?: boolean;
 };
 
 type State = Omit<EditorInitial, "id" | "publicUrl" | "pendingDraftAt">;
@@ -79,7 +81,7 @@ const useMounted = () => useSyncExternalStore(noopSubscribe, () => true, () => f
 
 const LIST_URL: Record<EditorKind, string> = { blog: "/admin/blog", article: "/admin/articles", project: "/admin/projects", page: "/admin" };
 
-export function PostEditor({ kind, initial, tagSuggestions = [], categories: initialCategories = [], projects = [] }: Props) {
+export function PostEditor({ kind, initial, tagSuggestions = [], categories: initialCategories = [], projects = [], ai = false }: Props) {
   const router = useRouter();
   const { id } = initial;
   const [state, setState] = useState<State>(() => {
@@ -395,6 +397,20 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
     }
   }
 
+  const [suggesting, setSuggesting] = useState(false);
+  async function suggestSummary() {
+    if (kind === "page") return;
+    setSuggesting(true);
+    try {
+      const { text } = await api<{ text: string }>("/api/admin/ai/summary", { json: { kind, title: state.title, document: state.contentJson } });
+      update("description", text);
+    } catch (e) {
+      setMessage({ kind: "error", text: (e as Error).message });
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
   async function uploadPreview() {
     const [file] = await pickFiles(undefined, false);
     if (!file) return;
@@ -502,7 +518,14 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
       )}
       {kind !== "page" && (
         <div>
-          <label htmlFor="description" className={label}>{kind === "blog" ? "Description" : kind === "project" ? "Summary" : "Excerpt"}</label>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <label htmlFor="description" className="text-sm font-medium">{kind === "blog" ? "Description" : kind === "project" ? "Summary" : "Excerpt"}</label>
+            {ai && (
+              <button type="button" className="btn-quiet min-h-8 px-2 text-xs" onClick={suggestSummary} disabled={suggesting} title="Write it with AI from the content">
+                <SparkleIcon width={14} height={14} /> {suggesting ? "Writing…" : "Suggest"}
+              </button>
+            )}
+          </div>
           <textarea id="description" className="field min-h-24" maxLength={kind === "article" ? 1000 : 500} value={state.description} onChange={(e) => update("description", e.target.value)} />
           {kind === "project" && <p className="mt-1 text-xs text-muted">One or two sentences, shown on project cards.</p>}
         </div>
@@ -647,7 +670,7 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
         Fixed editor header, like a word processor: actions on top, the formatting bar below (md+). It is solid and
         spans the whole content area, so the text scrolls cleanly underneath and nothing overlaps the sidebar.
       */}
-      <div ref={headerRef} className="sticky top-14 z-30 -mx-4 -mt-6 mb-6 border-b border-line bg-bg sm:-mx-6 lg:top-0 lg:-mx-10 lg:-mt-10">
+      <div ref={headerRef} data-editor-header className="sticky top-14 z-30 -mx-4 -mt-6 mb-6 border-b border-line bg-bg sm:-mx-6 lg:top-0 lg:-mx-10 lg:-mt-10">
         <div className="px-2 sm:px-4 lg:px-8">
           <div className="mx-auto flex h-14 max-w-6xl items-center gap-2">
             <Link href={LIST_URL[kind]} className="flex size-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-muted hover:bg-surface-2 hover:text-fg" aria-label="Back">
@@ -719,7 +742,7 @@ export function PostEditor({ kind, initial, tagSuggestions = [], categories: ini
                 }
               }}
             />
-            <RichEditor content={initial.contentJson} onChange={onContentChange} onReady={onReady} toolbarHost={toolbarHost} />
+            <RichEditor content={initial.contentJson} onChange={onContentChange} onReady={onReady} toolbarHost={toolbarHost} ai={ai} title={state.title} />
           </div>
 
           {kind !== "page" && (

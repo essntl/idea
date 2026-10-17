@@ -31,7 +31,7 @@ export function NewContentMenu() {
       items={[
         { label: "Blog post", onSelect: () => void create("blog") },
         { label: "Article", onSelect: () => void create("article") },
-        { label: "Project", onSelect: () => void create("project") },
+        { label: "Project", onSelect: () => router.push("/admin/projects?new=1") },
       ]}
     />
   );

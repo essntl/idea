@@ -9,6 +9,8 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 export type SlashActions = {
   pickImage: () => void;
   pickFromLibrary: () => void;
+  /** Opens the AI bar (with its prompt focused) when the AI assistant is set up; null otherwise. */
+  askAi: () => (() => void) | null;
 };
 
 type Item = { title: string; hint: string; keywords: string; run: (editor: Editor, range: Range, actions: SlashActions) => void };
@@ -88,10 +90,22 @@ export const SLASH_ITEMS: Item[] = [
   },
 ];
 
-export function filterItems(query: string) {
+/** "/ai": removes the command and opens the AI bar for the paragraph, ready to type the prompt. */
+const ASK_AI_ITEM: Item = {
+  title: "Ask AI",
+  hint: "Write or edit with AI",
+  keywords: "ai assistant write rewrite",
+  run: (e, r, a) => {
+    e.chain().focus().deleteRange(r).run();
+    a.askAi()?.();
+  },
+};
+
+export function filterItems(query: string, actions?: SlashActions) {
+  const items = actions?.askAi() ? [ASK_AI_ITEM, ...SLASH_ITEMS] : SLASH_ITEMS;
   const q = query.toLowerCase().trim();
-  if (!q) return SLASH_ITEMS;
-  return SLASH_ITEMS.filter((i) => i.title.toLowerCase().includes(q) || i.keywords.includes(q));
+  if (!q) return items;
+  return items.filter((i) => i.title.toLowerCase().includes(q) || i.keywords.includes(q));
 }
 
 type MenuHandle = { onKeyDown: (p: SuggestionKeyDownProps) => boolean };
@@ -166,7 +180,7 @@ export function createSlashCommand(getActions: () => SlashActions) {
           char: "/",
           startOfLine: false,
           allowSpaces: false,
-          items: ({ query }) => filterItems(query),
+          items: ({ query }) => filterItems(query, getActions()),
           command: ({ editor, range, props }) => props.run(editor, range, getActions()),
           allow: ({ state, range }) => {
             const $from = state.doc.resolve(range.from);

@@ -29,6 +29,7 @@ services:
       RECAPTCHA_SITE_KEY: ""
       RECAPTCHA_SECRET_KEY: ""
       GITHUB_TOKEN: ""
+      AI_API_KEY: ""
       UPLOAD_DIR: /data/uploads
       MAX_UPLOAD_MB: "15"
       TZ: UTC
@@ -75,6 +76,9 @@ services:
         - container: GITHUB_TOKEN
           description:
             en_us: Optional read-only GitHub token for the projects page (raises the API limit from 60 to 5,000 requests an hour)
+        - container: AI_API_KEY
+          description:
+            en_us: Optional. Usually set in Admin → Settings → AI assistant instead; a value here overrides it
         - container: MAX_UPLOAD_MB
           description:
             en_us: Maximum image upload size in MB

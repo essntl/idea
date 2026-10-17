@@ -12,6 +12,7 @@ import tar from "tar-stream";
 import { z } from "zod";
 import { prisma } from "../db";
 import { resolveMediaPath } from "../media";
+import { SECRET_PREFIX } from "../secrets";
 import { Prisma } from "@/generated/prisma/client";
 
 export const BACKUP_VERSION = 1;
@@ -26,7 +27,8 @@ export async function createBackupStream(): Promise<Readable> {
     prisma.article.findMany({ include: { tags: { select: { id: true } } } }),
     prisma.comment.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.page.findMany(),
-    prisma.setting.findMany(),
+    // Encrypted secrets (e.g. the AI key) stay on this server: they're tied to its NEXTAUTH_SECRET anyway.
+    prisma.setting.findMany({ where: { NOT: { key: { startsWith: SECRET_PREFIX } } } }),
     prisma.redirect.findMany(),
   ]);
   const data = {
@@ -148,7 +150,7 @@ export async function restoreBackup(input: Readable): Promise<RestoreSummary> {
       await tx.category.deleteMany();
       await tx.media.deleteMany();
       await tx.page.deleteMany();
-      await tx.setting.deleteMany();
+      await tx.setting.deleteMany({ where: { NOT: { key: { startsWith: SECRET_PREFIX } } } });
       await tx.redirect.deleteMany();
 
       await tx.category.createMany({ data: data.categories });
@@ -166,7 +168,9 @@ export async function restoreBackup(input: Readable): Promise<RestoreSummary> {
       // Parents before replies (sorted by createdAt on export).
       for (const c of data.comments) await tx.comment.create({ data: c });
       for (const p of data.pages) await tx.page.create({ data: { ...p, draft: p.draft ?? Prisma.DbNull, contentJson: p.contentJson ?? {} } });
-      for (const s of data.settings) await tx.setting.create({ data: { key: s.key, value: s.value ?? null } });
+      for (const s of data.settings) {
+        if (!s.key.startsWith(SECRET_PREFIX)) await tx.setting.create({ data: { key: s.key, value: s.value ?? null } });
+      }
       await tx.redirect.createMany({ data: data.redirects });
     },
     { timeout: 120_000 },

@@ -49,3 +49,4 @@ export const EraserIcon = (p: P) => (<svg {...base} {...p}><path d="M5 18 15.5 7
 export const ImageIcon = (p: P) => (<svg {...base} {...p}><rect x="3" y="4" width="18" height="16" rx="2.5" /><circle cx="9" cy="10" r="1.6" /><path d="m21 16-5-5-9 9" /></svg>);
 export const TableIcon = (p: P) => (<svg {...base} {...p}><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M3 10h18M3 15h18M10 10v10" /></svg>);
 export const TextColorIcon = (p: P) => (<svg {...base} {...p}><path d="m6.5 16 5.5-12 5.5 12M8.6 11.5h6.8" /><path d="M4 20h16" strokeWidth={2.4} /></svg>);
+export const SparkleIcon = (p: P) => (<svg {...base} {...p}><path d="M12 3.5 13.9 9l5.6 2-5.6 2L12 18.5 10.1 13 4.5 11l5.6-2L12 3.5Z" /><path d="M19 3v3M17.5 4.5h3M5 17.5v3M3.5 19h3" /></svg>);

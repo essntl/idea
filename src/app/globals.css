@@ -451,6 +451,22 @@ a, button, input, textarea, select, summary {
   :root:not(.light) .prose-comment pre.shiki span { color: var(--shiki-dark); font-weight: var(--shiki-dark-font-weight, inherit); font-style: var(--shiki-dark-font-style, inherit); }
 }
 
+/* AI edits: the target is highlighted; while the AI writes, the original is hidden and a live word diff shows instead. */
+.editor .ai-target { background: color-mix(in srgb, var(--fg) 13%, transparent); border-radius: 2px; }
+.editor .ai-hidden { display: none; }
+.ai-diff, .ProseMirror .ai-diff[contenteditable="false"] { white-space: pre-wrap; }
+.ai-diff-block { display: block; margin: 1.25em 0; }
+.ai-ins { background: color-mix(in srgb, var(--fg) 14%, transparent); border-radius: 2px; box-shadow: 0 1.5px 0 color-mix(in srgb, var(--fg) 45%, transparent); }
+.ai-del { color: var(--subtle); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--fg) 45%, transparent); }
+.ai-pending { color: var(--subtle); }
+.ai-caret { display: inline-block; width: 2px; height: 1.05em; margin-left: 1px; vertical-align: text-bottom; background: var(--fg); animation: ai-blink 1s steps(1) infinite; }
+.ai-sparkle { animation: ai-pulse 1.4s ease-in-out infinite; }
+@keyframes ai-blink { 50% { opacity: 0; } }
+@keyframes ai-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) {
+  .ai-caret, .ai-sparkle { animation: none; }
+}
+
 /* Comment editor (TipTap) */
 .comment-editor .ProseMirror { min-height: 5.5rem; outline: none; padding: 0.625rem 0.75rem; }
 .comment-editor .ProseMirror p.is-editor-empty:first-child::before {
