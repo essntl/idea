@@ -370,7 +370,7 @@ All settings are environment variables, documented in [`.env.example`](.env.exam
 | `APP_PORT` | `3000` | Host port (compose) |
 | `APP_IMAGE` | local build | e.g. `ghcr.io/essntl/idea:latest` |
 
-The site title, description, footer links, GitHub activity, comment approval and comment on/off switches are edited in **Admin → Settings**. The footer defaults to artemk.dev, contact@artemk.dev and github.com/essntl.
+The site title, description, footer links, GitHub activity, comment approval and comment on/off switches are edited in **Admin → Settings**. The footer defaults to artemk.dev, contact@artemk.dev, github.com/essntl and x.com/artemkdev.
 
 ---
 
