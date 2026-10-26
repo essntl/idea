@@ -36,7 +36,7 @@ export const DEFAULT_SETTINGS: Settings = {
   portfolioUrl: "https://artemk.dev",
   contactEmail: "contact@artemk.dev",
   githubUrl: "https://github.com/essntl",
-  socialLinks: [{ label: "X", url: "https://x.com/artemkdev" }],
+  socialLinks: [],
   captchaProvider: null,
   commentsRequireApproval: false,
   commentsEnabled: true,
