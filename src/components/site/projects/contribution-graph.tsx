@@ -1,6 +1,13 @@
 import type { ContributionDay } from "@/lib/github";
 
-const LEVEL_CLASS = ["bg-surface-2", "bg-fg/20", "bg-fg/40", "bg-fg/65", "bg-fg"] as const;
+/** GitHub's green scale, with its dark-mode counterpart so low levels stay visible on dark backgrounds. */
+const LEVEL_CLASS = [
+  "bg-surface-2",
+  "bg-[#9be9a8] dark:bg-[#0e4429]",
+  "bg-[#40c463] dark:bg-[#006d32]",
+  "bg-[#30a14e] dark:bg-[#26a641]",
+  "bg-[#216e39] dark:bg-[#39d353]",
+] as const;
 /** Phones show the last 26 weeks; wider screens the whole year. */
 const PHONE_WEEKS = 26;
 
